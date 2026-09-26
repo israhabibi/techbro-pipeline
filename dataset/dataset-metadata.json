@@ -1,0 +1,15 @@
+{
+  "title": "Techbro Twitter Indonesia Dataset",
+  "id": "israhabibi/techbro-twitter-indonesia",
+  "licenses": [{"name": "CC0-1.0"}],
+  "isPrivate": false,
+  "description": "Kumpulan tweet dari komunitas techbro Indonesia (engineer/developer/founder teknologi Tanah Air) yang dikumpulkan harian lewat timeline X (Twitter). Tiga level granularitas: per-tweet, per-hari x user, dan topik hangat teragregasi. Cocok untuk riset NLP, sosiolinguistik, dan analisis komunitas tech Indonesia.",
+  "tags": [
+    {"name": "nlp"},
+    {"name": "social media"},
+    {"name": "text data"},
+    {"name": "python"},
+    {"name": "twitter"}
+  ],
+  "resources": []
+}

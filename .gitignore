@@ -1,0 +1,13 @@
+data/
+.env
+creds.json
+threads_creds.json
+pgdata/
+certs/
+__pycache__/
+*.pyc
+letsencrypt/
+deploy-snbp/
+.venv/
+feed_raw.json
+letsencrypt/

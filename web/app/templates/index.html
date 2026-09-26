@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Techbro Digest</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Source+Serif+4:opsz,wght@8..60,600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f7f4ed;        /* krem koran */
+    --ink:#1a1a1a;          /* hitam tinta */
+    --muted:#6b6b66;
+    --red:#c0211f;           /* merah oposisi */
+    --redsoft:#f3e2e0;
+    --line:#d8d2c4;
+    --blue:#1a4d8;          /* aksen techbro */
+    --yellow:#b8860b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+        font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+        line-height:1.55;font-size:16px}
+  h1,h2,h3,.serif{font-family:"Playfair Display","Source Serif 4",Georgia,serif}
+
+  /* masthead */
+  header{border-bottom:3px double var(--ink);padding:14px 20px 10px;
+         text-align:center;background:var(--paper)}
+  header .mast{font-family:"Playfair Display",Georgia,serif;font-weight:900;
+         font-size:34px;letter-spacing:-.5px;margin:0;line-height:1}
+  header .mast .amp{color:var(--red);font-style:italic}
+  header .sub{font-size:11px;text-transform:uppercase;letter-spacing:3px;
+         color:var(--muted);margin-top:4px}
+  header .date{border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+         margin-top:8px;padding:3px 0;font-size:11px;letter-spacing:2px;
+         text-transform:uppercase;color:var(--muted)}
+
+  main{max-width:860px;margin:0 auto;padding:22px 16px 70px}
+
+  /* TLDR headline */
+  .lede{font-family:"Playfair Display",Georgia,serif;font-weight:700;
+        font-size:23px;line-height:1.3;border-bottom:2px solid var(--ink);
+        padding-bottom:14px;margin-bottom:8px}
+  .lede .kicker{display:block;font-family:-apple-system,sans-serif;font-weight:700;
+        font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--red);
+        margin-bottom:6px}
+
+  section{margin-top:38px}
+  .sec-head{display:flex;align-items:baseline;gap:10px;
+           border-bottom:3px solid var(--ink);padding-bottom:4px;margin-bottom:14px}
+  .sec-head h2{font-size:26px;font-weight:900;margin:0}
+  .sec-head .tag{margin-left:auto;font-size:11px;font-weight:700;
+         letter-spacing:1px;text-transform:uppercase;color:var(--muted);
+         border:1px solid var(--line);padding:2px 8px;border-radius:2px}
+  .sec-head.red h2{color:var(--red)}
+
+  /* techbro contributors */
+  .byline{font-size:13px;color:var(--muted);margin-bottom:14px;
+          border-left:3px solid var(--blue);padding-left:10px}
+  .byline b{color:var(--blue)}
+  .chip{display:inline-block;background:#eef1fb;color:var(--blue);
+         border-radius:3px;padding:2px 7px;margin:3px 4px 3px 0;font-size:12px;
+         font-weight:600}
+
+  /* theme = koran column */
+  .col{border-top:1px solid var(--line);padding:14px 0}
+  .col h3{font-size:19px;font-weight:700;margin:0 0 6px;line-height:1.2}
+  .col .deck{font-size:14px;color:#33332e;margin:0 0 6px;font-style:italic}
+  .col .body{font-size:15px;line-height:1.7;color:#1a1a1a;margin:6px 0 0}
+  .col .body p{margin:0 0 10px}
+  .col ul{margin:4px 0 0;padding-left:18px;font-size:14px}
+  .col li{margin:3px 0}
+
+  /* pinggir jurang = merah all */
+  .opp{border-left:5px solid var(--red);background:var(--redsoft);
+        padding:12px 14px;margin-bottom:12px;border-radius:0 4px 4px 0}
+  .opp h3{color:var(--red);font-size:18px;font-weight:900;margin:0 0 4px}
+  .opp .deck{font-style:italic;margin:0 0 6px;color:#3a1414}
+  .opp .body{font-size:14px;line-height:1.65;color:#2a0f0f;margin:6px 0 0}
+  .opp .body p{margin:0 0 9px}
+  .opp ul{margin:4px 0 0;padding-left:18px;font-size:14px}
+  .art{border-top:1px solid var(--line);padding:10px 0}
+  .art .hl{font-family:"Playfair Display",Georgia,serif;font-weight:700;
+        font-size:16px;line-height:1.25}
+  .art a{color:var(--ink);text-decoration:none}
+  .art a:hover{color:var(--red);text-decoration:underline}
+  .art .why{display:inline-block;background:var(--red);color:#fff;font-size:10px;
+         font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+         padding:1px 6px;border-radius:2px;margin-left:6px;vertical-align:middle}
+  .art .src{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+
+  /* kategori tempo */
+  .cat{border-top:1px solid var(--line);padding:9px 0}
+  .cat .ch{font-family:"Playfair Display",Georgia,serif;font-weight:700;
+        font-size:17px;color:var(--yellow);display:inline-block}
+  .cat .cnt{font-size:12px;color:var(--muted);margin-left:6px}
+  .cat ul{margin:4px 0 0;padding-left:18px;font-size:14px}
+  .empty{color:var(--muted);font-style:italic;font-size:14px;
+         border:1px dashed var(--line);padding:10px;border-radius:4px}
+
+  /* TEMPO FADED — sengaja diredam biar techbro yang menonjol */
+  .faded{opacity:.45;filter:grayscale(60%);transition:opacity .2s}
+  .faded:hover{opacity:.8;filter:none}
+  .faded-note{font-size:11px;color:var(--muted);text-transform:uppercase;
+              letter-spacing:1.5px;margin:0 0 6px;font-style:italic}
+  footer{max-width:860px;margin:40px auto 0;padding:14px 16px;
+          border-top:3px double var(--ink);font-size:11px;color:var(--muted);
+          text-transform:uppercase;letter-spacing:2px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="mast">Techbro<br><span style="font-weight:400;font-size:18px;letter-spacing:1px;color:var(--muted)">Ringkasan Harian</span></h1>
+  <div class="date">Edisi {{ date }}</div>
+</header>
+
+<main>
+{% if has_digest %}
+  {% if digest.tldr %}<div class="lede"><span class="kicker">Ringkasan Hari Ini</span>{{ digest.tldr }}</div>{% endif %}
+
+  <section>
+    <div class="sec-head"><h2>🧵 Thread Harian Techbro</h2><span class="tag">{{ feed.techbro_tweets }} tweet</span></div>
+    {% set tb = digest.techbro if digest.techbro is mapping else none %}
+    {% if tb and tb.contributors %}
+      <div class="byline">Kontributor:
+        {% for c in tb.contributors %}<span class="chip">@{{ c.user.lstrip('@') }} ({{ c.count }})</span>{% endfor %}
+      </div>
+    {% endif %}
+    {% if tb and tb.themes %}
+      {% for theme in tb.themes %}
+      <div class="col">
+        <h3>{{ theme.title }}</h3>
+        {% if theme.summary %}<p class="deck">{{ theme.summary }}</p>{% endif %}
+        {% if theme.body %}
+          <div class="body">
+          {% for para in theme.body %}<p>{{ para }}</p>{% endfor %}
+          </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% else %}<div class="empty">Belum ada hiruk-pikuk techbro hari ini.</div>{% endif %}
+  </section>
+
+  {% if topics and topics.topics %}
+  <section>
+    <div class="sec-head"><h2>🔥 Tracker Topik Techbro</h2><span class="tag">{{ topics.topics|length }} topik</span></div>
+    {% for t in topics.topics %}
+      <div class="col" style="border-left:3px solid var(--red);padding-left:12px">
+        <h3>{{ t.topic }} <span class="src" style="font-size:11px;color:var(--muted)">{{ t.count }} tweet</span></h3>
+        {% if t.summary %}<p class="deck">{{ t.summary }}</p>{% endif %}
+        {% if t.handles %}<div style="font-size:12px;color:var(--blue)">{{ t.handles|join(' ') }}</div>{% endif %}
+      </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+{% else %}
+  <div class="empty">Edisi hari ini belum terbit. Akan di-generate otomatis oleh mesin pukul 07:00 UTC.</div>
+{% endif %}
+</main>
+
+<footer>Techbro Digest · generated by Hermes</footer>
+
+<!-- chat AI dihapus atas permintaan user -->
+
+</body>
+</html>
+
+

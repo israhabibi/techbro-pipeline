@@ -1,0 +1,27 @@
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+    http:
+      tls: true
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: israhabibi@gmail.com
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+
+api:
+  dashboard: true
+  insecure: false
+
+log:
+  level: DEBUG
+
+providers:
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
