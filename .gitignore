@@ -11,3 +11,4 @@ deploy-snbp/
 .venv/
 feed_raw.json
 letsencrypt/
+snbp-dist/

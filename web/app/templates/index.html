@@ -116,10 +116,10 @@
 
 <main>
 {% if has_digest %}
-  {% if digest.tldr %}<div class="lede"><span class="kicker">Ringkasan Hari Ini</span>{{ digest.tldr }}</div>{% endif %}
-
-  <section>
-    <div class="sec-head"><h2>🧵 Thread Harian Techbro</h2><span class="tag">{{ feed.techbro_tweets }} tweet</span></div>
+  {% for digest in all_digests|reverse %}
+  <section style="margin-top:18px;border-top:3px solid var(--line);padding-top:14px">
+    <div class="sec-head"><h2>🧵 {{ digest.date }}</h2><span class="tag">{% if digest.techbro and digest.techbro.contributors %}{{ digest.techbro.contributors|length }} kontributor{% endif %}</span></div>
+    {% if digest.tldr %}<div class="lede" style="font-size:18px;border-bottom:none;padding-bottom:0;margin-bottom:10px"><span class="kicker" style="font-size:10px">TL;DR</span>{{ digest.tldr }}</div>{% endif %}
     {% set tb = digest.techbro if digest.techbro is mapping else none %}
     {% if tb and tb.contributors %}
       <div class="byline">Kontributor:
@@ -138,8 +138,9 @@
         {% endif %}
       </div>
       {% endfor %}
-    {% else %}<div class="empty">Belum ada hiruk-pikuk techbro hari ini.</div>{% endif %}
+    {% endif %}
   </section>
+  {% endfor %}
 
   {% if topics and topics.topics %}
   <section>
@@ -155,7 +156,7 @@
   {% endif %}
 
 {% else %}
-  <div class="empty">Edisi hari ini belum terbit. Akan di-generate otomatis oleh mesin pukul 07:00 UTC.</div>
+  <div class="empty">Belum ada data digest. Pipeline akan berjalan otomatis besok 08:00 WIB.</div>
 {% endif %}
 </main>
 
