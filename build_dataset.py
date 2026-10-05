@@ -30,7 +30,7 @@ def parse_date(created_at):
 def build_tweets(month=None):
     rows = []
     seen = set()
-    for f in sorted(glob.glob(os.path.join(DATA, "feed_*.json"))):
+    for f in sorted(glob.glob(os.path.join(DATA, "feed", "feed_*.json"))):
         try:
             d = json.load(open(f))
         except Exception:
@@ -92,7 +92,7 @@ def build_activity(month=None):
 
 
 def build_topics():
-    files = sorted(glob.glob(os.path.join(DATA, "topics_*.json")))
+    files = sorted(glob.glob(os.path.join(DATA, "topics", "topics_*.json")))
     if not files:
         return []
     d = json.load(open(files[-1]))

@@ -11,7 +11,7 @@ DATA = os.path.join(BASE, "data")
 
 
 def latest_topics_file():
-    files = sorted(glob.glob(os.path.join(DATA, "topics_*.json")))
+    files = sorted(glob.glob(os.path.join(DATA, "topics", "topics_*.json")))
     return files[-1] if files else None
 
 
@@ -113,8 +113,8 @@ def main():
         "status": "draft",
         "parts": parts,
     }
-    json_path = os.path.join(DATA, f"threads_draft_{date}.json")
-    text_path = os.path.join(DATA, f"threads_draft_{date}.txt")
+    json_path = os.path.join(DATA, "threads", f"threads_draft_{date}.json")
+    text_path = os.path.join(DATA, "threads", f"threads_draft_{date}.txt")
     with open(json_path, "w", encoding="utf-8") as fh:
         json.dump(draft, fh, ensure_ascii=False, indent=2)
     with open(text_path, "w", encoding="utf-8") as fh:

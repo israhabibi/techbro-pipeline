@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(BASE, "data")
-os.makedirs(DATA, exist_ok=True)
+os.makedirs(os.path.join(DATA, "topics"), exist_ok=True)
 KEY = os.environ.get("ADACODE_API_KEY", "")
 MODEL = os.environ.get("ADACODE_MODEL", "adacode-2.0")
 API = "https://api.adacode.ai/v1/chat/completions"
@@ -28,7 +28,7 @@ def parse_timestamp(created_at):
 
 def collect_tweets(window_hours=WINDOW_HOURS):
     """Ambil tweet techbro dalam jendela waktu terakhir, berdasarkan waktu Jakarta."""
-    files = sorted(glob.glob(os.path.join(DATA, "feed_*.json")))[-14:]
+    files = sorted(glob.glob(os.path.join(DATA, "feed", "feed_*.json")))[-14:]
     now = datetime.datetime.now(LOCAL_TZ)
     cutoff = now - datetime.timedelta(hours=window_hours)
     tweets = []
@@ -126,7 +126,7 @@ def main():
         "total_tweets_scanned": len(tweets),
         "topics": topics,
     }
-    fname = os.path.join(DATA, f"topics_{today}.json")
+    fname = os.path.join(DATA, "topics", f"topics_{today}.json")
     with open(fname, "w") as f:
         json.dump(out, f, indent=2, ensure_ascii=False)
     print(f"Saved -> {fname} ({len(topics)} topik)")

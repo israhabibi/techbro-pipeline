@@ -25,7 +25,7 @@ VIDEO_RENDER_LOCK = threading.Lock()
 
 
 def _latest(prefix):
-    files = sorted(glob.glob(os.path.join(DATA_DIR, f"{prefix}_*.json")))
+    files = sorted(glob.glob(os.path.join(DATA_DIR, prefix, f"{prefix}_*.json")))
     if not files:
         return None
     try:
@@ -44,7 +44,7 @@ def _today_prefix():
 
 def _daily_dates():
     dates = []
-    for path in glob.glob(os.path.join(DATA_DIR, "feed_*.json")):
+    for path in glob.glob(os.path.join(DATA_DIR, "feed", "feed_*.json")):
         day = os.path.basename(path)[5:-5]
         if len(day) == 8 and day.isdigit():
             dates.append(day)
@@ -105,10 +105,15 @@ SYSTEM = (
 
 
 @app.get("/")
-def home(request: Request):
+def home(request: Request, day: str = None):
+    return daily_page(request, day)
+
+
+@app.get("/_home_old")
+def home_old(request: Request):
     import glob
     all_digests = []
-    for f in sorted(glob.glob(os.path.join(DATA_DIR, "digest_*.json"))):
+    for f in sorted(glob.glob(os.path.join(DATA_DIR, "digest", "digest_*.json"))):
         try:
             d = json.load(open(f))
             if d.get("techbro") and d["techbro"].get("themes"):
@@ -152,11 +157,11 @@ def home(request: Request):
 def daily_page(request: Request, day: str = None):
     dates = _daily_dates()
     selected = day if day in dates else (dates[0] if dates else None)
-    feed = _load_json(os.path.join(DATA_DIR, f"feed_{selected}.json")) if selected else None
-    topics = _load_json(os.path.join(DATA_DIR, f"topics_{selected}.json")) if selected else None
-    draft = _load_json(os.path.join(DATA_DIR, f"threads_draft_{selected}.json")) if selected else None
+    feed = _load_json(os.path.join(DATA_DIR, "feed", f"feed_{selected}.json")) if selected else None
+    topics = _load_json(os.path.join(DATA_DIR, "topics", f"topics_{selected}.json")) if selected else None
+    draft = _load_json(os.path.join(DATA_DIR, "threads", f"threads_draft_{selected}.json")) if selected else None
     if selected and not draft:
-        old_draft = os.path.join(DATA_DIR, f"threads_draft_{selected}.txt")
+        old_draft = os.path.join(DATA_DIR, "threads", f"threads_draft_{selected}.txt")
         try:
             with open(old_draft, encoding="utf-8") as fh:
                 legacy_parts = [p.strip() for p in fh.read().split("\n\n---\n\n") if p.strip()]
@@ -184,7 +189,7 @@ def daily_tweets(
 ):
     if day not in _daily_dates():
         return JSONResponse({"error": "tanggal tidak ditemukan"}, status_code=404)
-    feed = _load_json(os.path.join(DATA_DIR, f"feed_{day}.json")) or {}
+    feed = _load_json(os.path.join(DATA_DIR, "feed", f"feed_{day}.json")) or {}
     tweets = feed.get("tweets", [])
     if techbro_only:
         tweets = [tweet for tweet in tweets if tweet.get("is_techbro_id")]
@@ -212,13 +217,16 @@ async def generate_daily_video(day: str, request: Request):
     except Exception:
         raise HTTPException(status_code=400, detail="Request JSON tidak valid")
     script = body.get("voiceover") if isinstance(body, dict) else None
+    assets_dir = body.get("assets_dir") if isinstance(body, dict) else None
+    if assets_dir is not None and not isinstance(assets_dir, str):
+        raise HTTPException(status_code=422, detail="assets_dir harus string")
     if not isinstance(script, str) or not script.strip() or len(script) > 1800:
         raise HTTPException(status_code=422, detail="Naskah wajib diisi (maksimal 1.800 karakter)")
     if not VIDEO_RENDER_LOCK.acquire(blocking=False):
         raise HTTPException(status_code=409, detail="Video lain sedang dirender; tunggu sampai selesai")
     try:
         result = await run_in_threadpool(
-            render_daily_video, DATA_DIR, day, script, PEXELS_API_KEY
+            render_daily_video, DATA_DIR, day, script, PEXELS_API_KEY, assets_dir
         )
     except VideoGenerationError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
@@ -241,6 +249,19 @@ def daily_video_file(day: str, filename: str):
         raise HTTPException(status_code=404, detail="File video tidak ditemukan")
     media_type = "video/mp4" if filename.endswith(".mp4") else "text/plain"
     return FileResponse(path, media_type=media_type, filename=filename if not filename.endswith(".mp4") else None)
+
+
+@app.get("/api/daily/{day}/videos")
+def daily_videos(day: str):
+    if day not in _daily_dates():
+        raise HTTPException(status_code=404, detail="Tanggal tidak ditemukan")
+    folder = os.path.join(DATA_DIR, "videos", day)
+    items = []
+    if os.path.isdir(folder):
+        for name in sorted(os.listdir(folder), reverse=True):
+            if re.fullmatch(rf"techbro-{day}-\d{{6}}-[a-f0-9]{{8}}\.mp4", name):
+                items.append({"filename": name, "video_url": f"/api/daily/{day}/video/{name}"})
+    return {"day": day, "videos": items}
 
 
 @app.post("/api/chat")
@@ -283,7 +304,7 @@ def health():
 
 def _load_all_topics():
     """Kumpulkan semua topics_*.json jadi list berurutan tanggal (lama->baru)."""
-    files = sorted(glob.glob(os.path.join(DATA_DIR, "topics_*.json")))
+    files = sorted(glob.glob(os.path.join(DATA_DIR, "topics", "topics_*.json")))
     out = []
     for f in files:
         try:

@@ -15,7 +15,7 @@ if os.environ.get("ENABLE_SUPPLEMENTAL_RSS", "").lower() not in {"1", "true", "y
     raise SystemExit(0)
 
 def _latest(prefix):
-    fs = sorted(glob.glob(os.path.join(DATA, f"{prefix}_*.json")))
+    fs = sorted(glob.glob(os.path.join(DATA, prefix, f"{prefix}_*.json")))
     return fs[-1] if fs else None
 
 src_path = _latest("sources")

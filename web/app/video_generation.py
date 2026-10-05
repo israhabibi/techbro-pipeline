@@ -16,8 +16,8 @@ from zoneinfo import ZoneInfo
 TZ = ZoneInfo("Asia/Jakarta")
 PEXELS_API = "https://api.pexels.com/v1/videos/search"
 MAX_CLIP_BYTES = 24 * 1024 * 1024
-MAX_DAILY_RENDERS = 3
-MAX_TOTAL_RENDERS = 30
+MAX_DAILY_RENDERS = 100  # praktis tanpa batas; cuma pengaman agar tidak loop tanpa henti
+MAX_TOTAL_RENDERS = 500  # pengaman disk
 
 
 class VideoGenerationError(RuntimeError):
@@ -178,19 +178,19 @@ def _render_ffmpeg(clips, titles, voice_path, srt_path, duration, output):
     subprocess.run(command, check=True, timeout=300)
 
 
-def render_daily_video(data_dir, day, script, pexels_key=""):
+def render_daily_video(data_dir, day, script, pexels_key="", assets_dir=None):
     if not re.fullmatch(r"\d{8}", day):
         raise VideoGenerationError("Format tanggal tidak valid")
     script = re.sub(r"\s+", " ", (script or "")).strip()
     if not script or len(script) > 1800:
         raise VideoGenerationError("Naskah kosong atau terlalu panjang (maksimal 1.800 karakter)")
-    for executable in ("espeak-ng", "ffmpeg", "ffprobe"):
+    for executable in ("ffmpeg", "ffprobe"):
         if not shutil.which(executable):
             raise VideoGenerationError(f"Dependensi lokal belum terpasang: {executable}")
 
     base = Path(data_dir)
-    draft = _json_file(base / f"threads_draft_{day}.json")
-    topics_file = _json_file(base / f"topics_{day}.json")
+    draft = _json_file(base / "threads" / f"threads_draft_{day}.json")
+    topics_file = _json_file(base / "topics" / f"topics_{day}.json")
     topic_map = {t.get("topic"): t for t in topics_file.get("topics", [])}
     selected = [p.get("topic") for p in draft.get("parts", []) if p.get("kind") == "topic"][:3]
     topics = [topic_map[name] for name in selected if name in topic_map]
@@ -201,9 +201,9 @@ def render_daily_video(data_dir, day, script, pexels_key=""):
     output_dir.mkdir(parents=True, exist_ok=True)
     existing = list(output_dir.glob("techbro-*.mp4"))
     if len(existing) >= MAX_DAILY_RENDERS:
-        raise VideoGenerationError("Batas 3 render per hari tercapai")
+        raise VideoGenerationError(f"Batas {MAX_DAILY_RENDERS} render per hari tercapai")
     if len(list((base / "videos").glob("*/techbro-*.mp4"))) >= MAX_TOTAL_RENDERS:
-        raise VideoGenerationError("Penyimpanan penuh (maksimal 30 video); pindahkan/hapus video lama terlebih dahulu")
+        raise VideoGenerationError("Penyimpanan penuh (maksimal 500 video); pindahkan/hapus video lama terlebih dahulu")
     stamp = dt.datetime.now(TZ).strftime("%H%M%S")
     suffix = os.urandom(4).hex()
     stem = f"techbro-{day}-{stamp}-{suffix}"
@@ -213,11 +213,18 @@ def render_daily_video(data_dir, day, script, pexels_key=""):
 
     with tempfile.TemporaryDirectory(prefix="techbro-video-") as temp_name:
         temp = Path(temp_name)
-        voice_path = temp / "voice.wav"
-        text = subprocess.run(["espeak-ng", "-v", "id", "-s", "158", "-w", str(voice_path), "--stdin"],
-                              input=script, text=True, capture_output=True, timeout=90)
+        voice_path = temp / "voice.mp3"
+        text = subprocess.run(
+            ["python3", "-m", "edge_tts", "--voice", "id-ID-GadisNeural",
+             "--text", script, "--write-media", str(voice_path)],
+            capture_output=True, text=True, timeout=120)
         if text.returncode or not voice_path.exists() or voice_path.stat().st_size < 1000:
-            raise VideoGenerationError("TTS lokal gagal membuat audio Bahasa Indonesia")
+            # fallback ke espeak-ng lokal
+            voice_path = temp / "voice.wav"
+            text = subprocess.run(["espeak-ng", "-v", "id", "-s", "158", "-w", str(voice_path), "--stdin"],
+                                  input=script, text=True, capture_output=True, timeout=90)
+            if text.returncode or not voice_path.exists() or voice_path.stat().st_size < 1000:
+                raise VideoGenerationError("TTS gagal membuat audio Bahasa Indonesia")
         try:
             duration = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
                                              "-of", "default=noprint_wrappers=1:nokey=1", str(voice_path)],
@@ -229,12 +236,24 @@ def render_daily_video(data_dir, day, script, pexels_key=""):
 
         script_groups = _group_voiceover(script, len(topics))
         title_files, clips, credits = [], [], []
+        # Aset lokal: pakai dulu scene-*.mp4 dari assets_dir (atau data/videos/{day})
+        local_dir = Path(assets_dir) if assets_dir else base / "videos" / day
+        scene_files = sorted(local_dir.glob("scene-*.mp4")) if local_dir.is_dir() else []
         for index, topic in enumerate(topics, start=1):
             title_file = temp / f"title-{index}.txt"
             title = topic.get("topic") or f"Topik {index}"
             title_file.write_text(f"OBROLAN TECHBRO\n\n{title}", encoding="utf-8")
             title_files.append(title_file)
             downloaded = temp / f"clip-{index}.mp4"
+            if index - 1 < len(scene_files):
+                target = temp / f"scene-{index}.mp4"
+                shutil.copy(scene_files[index - 1], target)
+                clips.append(target)
+                credits.append({"type": "local", "topic": title,
+                                "source": str(scene_files[index - 1]),
+                                "creator": "aset lokal",
+                                "license": "Aset milik sendiri — pastikan lisensi footage"})
+                continue
             asset = _pexels_asset(_search_terms(title), pexels_key, downloaded)
             if asset:
                 clips.append(downloaded)
@@ -261,4 +280,5 @@ def render_daily_video(data_dir, day, script, pexels_key=""):
                                       ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {"filename": output.name, "srt": srt_path.name, "credits": credits_path.name,
             "duration_seconds": round(duration, 1), "pexels_used": sum(a["type"] == "pexels" for a in credits),
+            "local_clips": sum(a["type"] == "local" for a in credits),
             "motion_cards": sum(a["type"] == "generated" for a in credits)}

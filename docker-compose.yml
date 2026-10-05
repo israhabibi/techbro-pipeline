@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   traefik:
     image: traefik:v3.3
@@ -21,43 +19,13 @@ services:
     environment:
       - DATA_DIR=/data
       - ADACODE_API_KEY=${ADACODE_API_KEY}
-      - ADACODE_MODEL=adacode-2.0
+      - ADACODE_MODEL=${ADACODE_MODEL:-adacode-2.0}
       - ENABLE_VIDEO_RENDER=true
       - PEXELS_API_KEY=${PEXELS_API_KEY:-}
     volumes:
       - ./data:/data
     ports:
-      - "127.0.0.1:8000:8000"
-    expose:
-      - "8000"
-    restart: unless-stopped
-    depends_on:
-      - traefik
-
-  9router:
-    image: decolua/9router:latest
-    container_name: 9router
-    ports:
-      - "20128:20128"
-    environment:
-      - NODE_ENV=production
-      - PORT=20128
-      - HOSTNAME=0.0.0.0
-      - DATA_DIR=/app/data
-      - JWT_SECRET=${NINEROUTER_JWT_SECRET}
-      - INITIAL_PASSWORD=${NINEROUTER_INITIAL_PASSWORD}
-      - API_KEY_SECRET=${NINEROUTER_API_KEY_SECRET}
-      - MACHINE_ID_SALT=${NINEROUTER_MACHINE_ID_SALT}
-      - NEXT_PUBLIC_BASE_URL=https://9router.airflow.my.id
-      - NEXT_PUBLIC_CLOUD_URL=https://9router.com
-      - BASE_URL=http://9router.airflow.my.id:20128
-      - CLOUD_URL=https://9router.com
-      - OBSERVABILITY_ENABLED=true
-      - ENABLE_REQUEST_LOGS=false
-      - AUTH_COOKIE_SECURE=false
-      - REQUIRE_API_KEY=false
-    volumes:
-      - /home/isra_habibi/.9router:/app/data
+      - "8000:8000"
     restart: unless-stopped
     depends_on:
       - traefik

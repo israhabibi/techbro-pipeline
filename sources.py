@@ -10,7 +10,7 @@ import json, os, sys, datetime, urllib.request, urllib.parse, xml.etree.ElementT
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(BASE, "data")
-os.makedirs(DATA, exist_ok=True)
+os.makedirs(os.path.join(DATA, "sources"), exist_ok=True)
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 
 # Keyword yang mau dipantau (bisa lo edit)
@@ -99,7 +99,7 @@ def main():
     except Exception as e:
         print(f"[warn] tempo: {e}", file=sys.stderr)
 
-    fname = os.path.join(DATA, f"sources_{today}.json")
+    fname = os.path.join(DATA, "sources", f"sources_{today}.json")
     with open(fname, "w") as f:
         json.dump(out, f, indent=2, ensure_ascii=False)
     print(f"\nSaved -> {fname}")

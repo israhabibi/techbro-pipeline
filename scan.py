@@ -8,7 +8,7 @@ import json, os, sys, time, datetime, re, urllib.request, urllib.error, urllib.p
 BASE = os.path.dirname(os.path.abspath(__file__))
 CREDS = os.environ.get("CREDS_FILE", os.path.join(os.path.dirname(BASE), "creds.json"))
 DATA = os.path.join(BASE, "data")
-os.makedirs(DATA, exist_ok=True)
+os.makedirs(os.path.join(DATA, "feed"), exist_ok=True)
 
 # ---- Reference techbro Indonesia (seed dari user) ----
 REF_HANDLES = {
@@ -205,7 +205,7 @@ def main(pages=3):
         "users": list(classified.values()),
         "tweets": out_tweets,
     }
-    fname = os.path.join(DATA, "feed_" + datetime.datetime.utcnow().strftime("%Y%m%d") + ".json")
+    fname = os.path.join(DATA, "feed", "feed_" + datetime.datetime.utcnow().strftime("%Y%m%d") + ".json")
     with open(fname, "w") as f:
         json.dump(out, f, indent=2, ensure_ascii=False)
     print(f"\nSaved -> {fname}")
