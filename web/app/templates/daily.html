@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arsip Harian Techbro</title>
+<style>
+  :root{--bg:#f5f4f0;--card:#fff;--ink:#20211f;--muted:#70736d;--line:#e4e3dd;--accent:#315c4b;--soft:#e9f1ec;--gold:#8a6418}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif}
+  a{color:inherit} header{background:var(--card);border-bottom:1px solid var(--line);padding:18px max(20px,calc((100% - 1040px)/2))}
+  nav{display:flex;gap:18px;font-size:13px;color:var(--muted);margin-bottom:15px} nav a{color:var(--accent);font-weight:650;text-decoration:none}
+  h1{font-size:27px;line-height:1.15;margin:0 0 5px} h2{font-size:20px;margin:0} h3{font-size:15px;margin:0}
+  .subtitle{color:var(--muted);font-size:13px}.day-picker{display:flex;align-items:center;gap:9px;margin-top:15px}.day-picker label{font-size:13px;color:var(--muted)}
+  select,button{font:inherit} select{border:1px solid var(--line);border-radius:8px;background:white;padding:8px 10px;color:var(--ink)}
+  main{max-width:1040px;margin:0 auto;padding:22px 18px 70px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px}
+  .stat,.panel{background:var(--card);border:1px solid var(--line);border-radius:12px}.stat{padding:13px 15px}.stat strong{display:block;font-size:21px}.stat span{color:var(--muted);font-size:12px}
+  .panel{padding:18px;margin:0 0 18px}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}.status{font-size:12px;padding:4px 9px;border-radius:999px;background:#f2eee1;color:var(--gold);white-space:nowrap}
+  .instructions{color:var(--muted);font-size:13px;margin:0 0 12px}.parts{display:grid;gap:11px}.part{border:1px solid var(--line);border-radius:10px;padding:13px}.part-top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}.part-label{font-weight:700;font-size:13px;color:var(--accent)}
+  .part-text{white-space:pre-wrap;margin:0 0 12px;font-size:15px}.part-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.copy-btn,.copy-all{border:0;border-radius:8px;background:var(--accent);color:white;padding:8px 12px;font-weight:650;cursor:pointer}.copy-all{background:#252a27}.posted{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;cursor:pointer}.posted input{accent-color:var(--accent)}
+  .prompt-mode{background:#e9ece8;color:var(--ink)}.prompt-mode.active{background:var(--accent);color:white}#video-prompt{display:block;width:100%;min-height:310px;resize:vertical;border:1px solid var(--line);border-radius:9px;padding:13px;background:#fbfbf9;color:var(--ink);font:13px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace}
+  #voiceover-script{display:block;width:100%;min-height:180px;resize:vertical;border:1px solid var(--line);border-radius:9px;padding:13px;background:#fbfbf9;color:var(--ink);font:14px/1.6 system-ui,sans-serif;margin-top:6px}.storyboard{display:grid;gap:10px}.scene{border:1px solid var(--line);border-radius:9px;padding:12px}.scene h3{margin-bottom:5px}.scene p{margin:5px 0;color:#4b4e49;font-size:13px}.scene-links{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;margin:8px 0}.scene-fields{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-top:8px}.scene-fields input{min-width:0;border:1px solid var(--line);border-radius:7px;padding:8px;font:13px system-ui}.license-check{display:flex;gap:7px;align-items:center;color:var(--muted);font-size:12px;margin-top:8px}.license-check input{accent-color:var(--accent)}
+  .video-preview{display:block;width:min(100%,360px);aspect-ratio:9/16;object-fit:contain;background:#111;border-radius:10px;margin-top:12px}button:disabled{opacity:.6;cursor:wait}
+  .topics{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.topic{border:1px solid var(--line);border-radius:9px;padding:12px}.topic p{margin:6px 0;color:#4b4e49;font-size:13px}.topic small{color:var(--muted)}
+  .feed-controls{display:flex;align-items:center;gap:10px}.feed-controls select{font-size:13px}.tweet-list{display:grid;gap:9px}.tweet{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:13px 15px}.tweet-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:7px}.handle{font-weight:700;color:var(--accent);text-decoration:none}.tweet time{font-size:12px;color:var(--muted);margin-left:auto}.badge{font-size:10px;padding:2px 7px;border-radius:999px;background:#f0f0ed;color:#62655e}.badge.tech{background:var(--soft);color:var(--accent)}.tweet-text{white-space:pre-wrap;margin:0;overflow-wrap:anywhere}.reasons{margin-top:7px;color:var(--muted);font-size:11px}.empty{border:1px dashed var(--line);border-radius:9px;padding:16px;color:var(--muted);text-align:center}.loader{padding:18px;text-align:center;color:var(--muted);font-size:13px}
+  @media(max-width:620px){header{padding:15px 17px}.stats{grid-template-columns:repeat(2,1fr)}.panel{padding:14px}.panel-head{align-items:flex-start}.tweet time{width:100%;margin-left:0}.day-picker{align-items:flex-start;flex-direction:column}.scene-fields{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <nav><a href="/">Digest</a><span>Arsip harian</span></nav>
+  <h1>Techbro X → Threads</h1>
+  <div class="subtitle">Draft per hari, status salin/post, dan arsip tweet timeline.</div>
+  <form class="day-picker" action="/daily" method="get">
+    <label for="day">Tanggal scan</label>
+    <select id="day" name="day" onchange="this.form.submit()">
+      {% for date in dates %}<option value="{{ date }}" {% if date == selected_day %}selected{% endif %}>{{ date[0:4] }}-{{ date[4:6] }}-{{ date[6:8] }}</option>{% endfor %}
+    </select>
+  </form>
+</header>
+
+<main>
+{% if selected_day and feed %}
+  <div class="stats">
+    <div class="stat"><strong>{{ feed.total_tweets or 0 }}</strong><span>tweet discan</span></div>
+    <div class="stat"><strong>{{ feed.techbro_tweets or 0 }}</strong><span>tweet techbro</span></div>
+    <div class="stat"><strong>{{ feed.total_users or 0 }}</strong><span>akun di timeline</span></div>
+    <div class="stat"><strong>{{ topics|length }}</strong><span>topik harian</span></div>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Draft Threads</h2><span class="status">Draft lokal · belum dipost</span></div>
+    {% if draft and draft.parts %}
+      <p class="instructions">Salin bagian pertama sebagai post utama, lalu bagian berikutnya sebagai balasan berurutan. Status tersimpan di browser ini.</p>
+      <div class="part-actions" style="margin-bottom:12px"><button class="copy-all" id="copy-all">Salin semua bagian</button><span id="copy-all-status" class="subtitle"></span></div>
+      <div class="parts" id="parts">
+        {% for part in draft.parts %}
+        <article class="part" data-part="{{ part.number }}">
+          <div class="part-top"><span class="part-label">Bagian {{ part.number }} dari {{ draft.parts|length }}{% if part.topic %} · {{ part.topic }}{% endif %}</span><span class="status part-status">Siap disalin</span></div>
+          <p class="part-text">{{ part.text }}</p>
+          <div class="part-actions">
+            <button class="copy-btn" type="button">Salin bagian</button>
+            <label class="posted"><input class="posted-check" type="checkbox"> Sudah dipost di Threads</label>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+    {% else %}<div class="empty">Draft untuk tanggal ini belum tersedia.</div>{% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Topik hari ini</h2><span class="status">24 jam terakhir · WIB</span></div>
+    {% if topics %}<div class="topics">
+      {% for topic in topics %}<article class="topic"><h3>{{ topic.topic }} <small>· {{ topic.count }} tweet</small></h3><p>{{ topic.summary }}</p>{% if topic.handles %}<small>{{ topic.handles|join(' · ') }}</small>{% endif %}</article>{% endfor %}
+    </div>{% else %}<div class="empty">Belum ada topik untuk tanggal ini.</div>{% endif %}
+  </section>
+
+  <section class="panel" id="video-prompt-panel">
+    <div class="panel-head"><h2>Prompt konten video</h2><span class="status">Siap ditempel ke Gemini</span></div>
+    <p class="instructions">Pilih prompt untuk video (mis. Veo) atau visual cover/keyframe (Nano Banana). Isinya memakai draft pada tanggal yang sedang dibuka.</p>
+    <div class="part-actions" style="margin-bottom:10px">
+      <button class="copy-btn prompt-mode active" type="button" data-mode="video">Prompt video</button>
+      <button class="copy-btn prompt-mode" type="button" data-mode="image">Prompt visual · Nano Banana</button>
+      <button class="copy-all" id="copy-video-prompt" type="button">Salin prompt</button>
+      <span id="prompt-copy-status" class="subtitle" aria-live="polite"></span>
+    </div>
+    <textarea id="video-prompt" aria-label="Prompt video yang bisa diedit dan disalin" spellcheck="true"></textarea>
+  </section>
+
+  <section class="panel" id="video-studio">
+    <div class="panel-head"><h2>Studio video harian</h2><span class="status">Naskah TTS + storyboard</span></div>
+    <p class="instructions">Naskah dan storyboard dibuat dari tiga topik teratas di draft. Salin naskah ke TTS di Gemini atau editor video, unduh audio-nya, lalu cari footage dan cek lisensinya. Setelah mengisi sumber aset dan mencentang verifikasi, unduh paket produksi. Untuk merender MP4, simpan klip sebagai <code>scene-01.mp4</code>, <code>scene-02.mp4</code>, dan seterusnya, lalu jalankan <code>python3 render_video.py --plan video-plan-TANGGAL.json --assets-dir FOLDER_KLIP --audio NARASI.mp3 --output HASIL.mp4</code>. Perubahan naskah dan catatan tersimpan di browser ini.</p>
+    <label for="voiceover-script" class="part-label">Naskah voice-over (bisa diedit)</label>
+    <textarea id="voiceover-script" spellcheck="true" aria-label="Naskah TTS"></textarea>
+    <div class="part-actions" style="margin:9px 0 16px">
+      <button class="copy-btn" id="copy-voiceover" type="button">Salin naskah TTS</button>
+      <button class="copy-all" id="generate-daily-video" type="button">Generate video otomatis</button>
+      <button class="copy-all" id="download-video-plan" type="button">Unduh paket produksi</button>
+      <span id="voiceover-status" class="subtitle" aria-live="polite"></span>
+    </div>
+    <div id="generated-video" hidden></div>
+    <div id="storyboard" class="storyboard"></div>
+    <p class="instructions" style="margin-top:12px"><a href="https://www.pexels.com/" target="_blank" rel="noopener">Pexels</a> · Jika PEXELS_API_KEY dikonfigurasi, video otomatis memakai stock clip dan mencantumkan kreator. Tanpa key, sistem membuat motion-card sendiri. Di paket produksi manual, cek lisensi dan atribusi setiap klip.</p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Tweet timeline</h2><div class="feed-controls"><span class="subtitle">Scroll untuk memuat berikutnya</span><select id="tweet-filter"><option value="all">Semua tweet</option><option value="techbro">Techbro saja</option></select></div></div>
+    <div class="tweet-list" id="tweet-list"></div>
+    <div class="loader" id="tweet-loader">Memuat tweet…</div>
+    <div id="tweet-sentinel" aria-hidden="true"></div>
+  </section>
+{% elif dates %}
+  <div class="empty">Data scan untuk tanggal ini tidak bisa dibaca.</div>
+{% else %}
+  <div class="empty">Belum ada data feed harian. Jalankan scanner X untuk membuat arsip pertama.</div>
+{% endif %}
+</main>
+
+<script>
+const selectedDay = {{ selected_day|tojson }};
+const dailyDraft = {{ (draft or {})|tojson }};
+const dailyTopics = {{ topics|tojson }};
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) return await navigator.clipboard.writeText(text);
+  } catch (_) {}
+  const input=document.createElement("textarea"); input.value=text; input.style.position="fixed"; input.style.opacity="0";
+  document.body.appendChild(input); input.select(); document.execCommand("copy"); input.remove();
+}
+
+const promptBox=document.getElementById("video-prompt");
+if (promptBox) {
+  const source=(dailyDraft.parts||[]).filter(p=>p.kind==="topic").map(p=>p.text.replace(/^\d+\/\d+\s*[—-]\s*/,"")).join("\n\n");
+  const videoPrompt=`Buat video TikTok berbahasa Indonesia berdasarkan bahan rangkuman di bawah. Jangan menambah fakta, kutipan, angka, atau kejadian yang tidak ada di bahan. Bedakan isi obrolan dengan analisis kami; kalau ada konteks yang tidak cukup, jangan mengarang.\n\nARAH VIDEO\n- Format vertikal 9:16, durasi sekitar 40–50 detik, ritme lincah tapi tetap mudah diikuti.\n- Gaya editorial teknologi yang hangat, cerdas, dan sederhana; bukan iklan dan bukan pembacaan berita kaku.\n- Buka dengan hook singkat yang bikin penasaran, lalu bahas maksimal 3 topik paling menarik dari bahan. Untuk tiap topik: apa yang dibahas, konteks sederhana, lalu kenapa penting/trade-off-nya. Akhiri dengan pertanyaan untuk penonton.\n- Buat narasi/voice-over Indonesia natural dan subtitle Bahasa Indonesia yang sinkron, kontras tinggi, maksimal 2 baris. Tampilkan nama topik sebagai teks layar.\n- Gunakan visual teknologi generik yang relevan; jangan membuat screenshot/tampilan X palsu, logo produk yang tidak disediakan, atau wajah orang nyata. Jangan tampilkan paragraf teks panjang.\n- Jika satu render tak bisa sepanjang durasi itu, pecah menjadi beberapa klip adegan yang bisa disambung dengan gaya visual konsisten.\n- Di akhir, tampilkan dan bacakan persis: “Rangkuman ini disusun dengan bantuan AI dari obrolan publik di X. Cek konteks dan sumber asli sebelum menyimpulkan.”\n\nBAHAN RANGKUMAN (${selectedDay||"tanggal dipilih"})\n${source}`;
+  const imagePrompt=`Buat satu visual cover/keyframe vertikal 9:16 untuk video TikTok rangkuman obrolan teknologi hari ${selectedDay||"ini"}. Ambil inspirasi dari topik berikut, tanpa menambah klaim atau menggambarkan orang nyata: ${source}\n\nGaya editorial teknologi yang hangat dan modern, komposisi sinematik, kontras jelas, fokus visual sederhana yang terbaca di layar ponsel. Sisakan ruang kosong di bagian atas untuk judul yang akan ditambahkan editor. Jangan membuat teks, logo, watermark, antarmuka X, atau screenshot palsu; jangan mencoba menuliskan disclaimer ke dalam gambar.`;
+  const modes=[...document.querySelectorAll(".prompt-mode")];
+  function setPrompt(mode){
+    promptBox.value=mode==="image"?imagePrompt:videoPrompt;
+    modes.forEach(button=>button.classList.toggle("active",button.dataset.mode===mode));
+  }
+  modes.forEach(button=>button.addEventListener("click",()=>setPrompt(button.dataset.mode)));
+  setPrompt("video");
+  document.getElementById("copy-video-prompt").addEventListener("click",async()=>{
+    await copyText(promptBox.value);
+    const status=document.getElementById("prompt-copy-status"); status.textContent="Prompt tersalin—tempel di Gemini.";
+    setTimeout(()=>status.textContent="",1800);
+  });
+}
+
+const voiceover=document.getElementById("voiceover-script");
+const storyboard=document.getElementById("storyboard");
+if (voiceover && storyboard) {
+  const visibleTopicNames=(dailyDraft.parts||[]).filter(p=>p.kind==="topic").slice(0,3).map(p=>p.topic);
+  const sourceTopics=visibleTopicNames.map(name=>dailyTopics.find(t=>t.topic===name)).filter(Boolean);
+  const sentenceList=value=>(value||"").replace(/\s+/g," ").trim().match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map(s=>s.trim())||[];
+  const narration=["Ada tiga obrolan teknologi yang menarik dari timeline X hari ini."];
+  let wordCount=narration[0].split(/\s+/).length;
+  sourceTopics.forEach((topic,index)=>{
+    const opener=`Topik ${index+1}, ${topic.topic}.`;
+    narration.push(opener); wordCount+=opener.split(/\s+/).length;
+    const pieces=[sentenceList(topic.summary)[0],sentenceList(topic.context)[0],sentenceList(topic.value_added?.replace(/^Analisis:\s*/,""))[0]].filter(Boolean);
+    for(const sentence of pieces){const size=sentence.split(/\s+/).length;if(wordCount+size<=105){narration.push(sentence);wordCount+=size;}}
+  });
+  narration.push("Mana yang menurutmu paling berdampak? Rangkuman ini disusun dengan bantuan AI dari obrolan publik di X. Cek konteks dan sumber asli sebelum menyimpulkan.");
+  voiceover.value=narration.join(" ");
+
+  function searchTerms(topic){
+    const name=(topic.topic||"").toLowerCase();
+    if(name.includes("agent")||name.includes("video")) return "video editing timeline creative studio hands editing video";
+    if(name.includes("rust")||name.includes("swift")) return "software developer code editor programming abstract";
+    if(name.includes("observability")) return "server monitoring dashboard data center network";
+    if(name.includes("voice")||name.includes("elevenlabs")) return "microphone audio waveform sound recording studio";
+    return `${topic.topic} technology software abstract`;
+  }
+  const studioKey=`video-assets-${selectedDay}`;
+  const scriptKey=`video-script-${selectedDay}`;
+  const generatedScript=narration.join(" ");
+  try{voiceover.value=localStorage.getItem(scriptKey)||generatedScript;}catch(_){voiceover.value=generatedScript;}
+  voiceover.addEventListener("input",()=>localStorage.setItem(scriptKey,voiceover.value));
+  let assetNotes={};
+  try{assetNotes=JSON.parse(localStorage.getItem(studioKey)||"{}");}catch(_){}
+  sourceTopics.forEach((topic,index)=>{
+    const sceneNo=index+1,query=searchTerms(topic),saved=assetNotes[sceneNo]||{};
+    const card=document.createElement("article");card.className="scene";
+    const title=document.createElement("h3");title.textContent=`Adegan ${sceneNo} · ${topic.topic}`;
+    const direction=document.createElement("p");direction.textContent=`Visual: ${query}. Pakai klip pendek sebagai ilustrasi, lalu tambahkan judul topik dan subtitle di editor.`;
+    const links=document.createElement("div");links.className="scene-links";
+    [["Cari video di Pexels",`https://www.pexels.com/search/videos/${encodeURIComponent(query)}/`],["Cari media di Wikimedia Commons",`https://commons.wikimedia.org/w/index.php?search=${encodeURIComponent(query)}&title=Special:MediaSearch&type=video`]].forEach(([label,url])=>{const a=document.createElement("a");a.href=url;a.target="_blank";a.rel="noopener";a.textContent=label;links.appendChild(a);});
+    const fields=document.createElement("div");fields.className="scene-fields";
+    [["assetUrl","URL aset terpilih","https://…"],["creator","Kreator","Nama kreator"],["license","Lisensi","Contoh: Pexels / CC BY"]].forEach(([key,label,placeholder])=>{const input=document.createElement("input");input.type="text";input.placeholder=placeholder;input.setAttribute("aria-label",`${label}, adegan ${sceneNo}`);input.value=saved[key]||"";input.addEventListener("input",()=>{assetNotes[sceneNo]??={};assetNotes[sceneNo][key]=input.value;localStorage.setItem(studioKey,JSON.stringify(assetNotes));});fields.appendChild(input);});
+    const checkLabel=document.createElement("label");checkLabel.className="license-check";const check=document.createElement("input");check.type="checkbox";check.checked=Boolean(saved.checked);check.addEventListener("change",()=>{assetNotes[sceneNo]??={};assetNotes[sceneNo].checked=check.checked;localStorage.setItem(studioKey,JSON.stringify(assetNotes));});checkLabel.append(check,document.createTextNode("Saya sudah cek izin penggunaan/atribusi klip ini"));
+    card.append(title,direction,links,fields,checkLabel);storyboard.appendChild(card);
+  });
+  document.getElementById("copy-voiceover").addEventListener("click",async()=>{await copyText(voiceover.value);const status=document.getElementById("voiceover-status");status.textContent="Naskah tersalin untuk TTS.";setTimeout(()=>status.textContent="",1600);});
+  document.getElementById("generate-daily-video").addEventListener("click",async(event)=>{
+    const button=event.currentTarget,status=document.getElementById("voiceover-status"),result=document.getElementById("generated-video");
+    button.disabled=true;button.textContent="Sedang membuat video…";status.textContent="TTS lokal + FFmpeg berjalan. Proses bisa memakan waktu beberapa menit.";result.hidden=true;result.replaceChildren();
+    try{
+      const response=await fetch(`/api/daily/${selectedDay}/video`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({voiceover:voiceover.value})});
+      const data=await response.json();if(!response.ok)throw new Error(data.detail||"Gagal membuat video.");
+      const player=document.createElement("video");player.controls=true;player.playsInline=true;player.src=data.video_url;player.className="video-preview";
+      const links=document.createElement("p");links.className="scene-links";
+      [["Unduh MP4",data.video_url],["Unduh subtitle SRT",data.subtitle_url],["Lihat kredit aset",data.credits_url]].forEach(([label,url])=>{const a=document.createElement("a");a.href=url;a.textContent=label;a.target="_blank";a.rel="noopener";links.appendChild(a);});
+      const note=document.createElement("p");note.className="instructions";note.textContent=`Durasi ${data.duration_seconds} dtk · ${data.pexels_used} stock clip Pexels · ${data.motion_cards} motion-card lokal. Suara eSpeak lokal; dengarkan dan cek timing subtitle sebelum dipost.`;
+      result.append(player,links,note);result.hidden=false;status.textContent="Video siap.";
+    }catch(error){status.textContent=error.message;}
+    finally{button.disabled=false;button.textContent="Generate video otomatis";}
+  });
+  document.getElementById("download-video-plan").addEventListener("click",()=>{
+    const plan={date:selectedDay,voiceover:voiceover.value,scenes:sourceTopics.map((topic,index)=>({scene:index+1,topic:topic.topic,visual_search:searchTerms(topic),asset:assetNotes[index+1]||{},search_links:{pexels:`https://www.pexels.com/search/videos/${encodeURIComponent(searchTerms(topic))}/`,wikimedia:`https://commons.wikimedia.org/w/index.php?search=${encodeURIComponent(searchTerms(topic))}&title=Special:MediaSearch&type=video`}})),disclaimer:"Rangkuman ini disusun dengan bantuan AI dari obrolan publik di X. Cek konteks dan sumber asli sebelum menyimpulkan."};
+    const blob=new Blob([JSON.stringify(plan,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`video-plan-${selectedDay}.json`;a.click();URL.revokeObjectURL(a.href);
+  });
+}
+const partsRoot = document.getElementById("parts");
+if (partsRoot && selectedDay) {
+  const storageKey = `threads-posted-${selectedDay}`;
+  let posted = {};
+  try { posted = JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch (_) {}
+  partsRoot.querySelectorAll(".part").forEach((part) => {
+    const number = part.dataset.part;
+    const checkbox = part.querySelector(".posted-check");
+    const badge = part.querySelector(".part-status");
+    checkbox.checked = Boolean(posted[number]);
+    const updateStatus = () => {
+      badge.textContent = checkbox.checked ? "Sudah dipost" : "Siap disalin";
+      posted[number] = checkbox.checked;
+      localStorage.setItem(storageKey, JSON.stringify(posted));
+    };
+    updateStatus();
+    checkbox.addEventListener("change", updateStatus);
+    part.querySelector(".copy-btn").addEventListener("click", async () => {
+      await copyText(part.querySelector(".part-text").textContent.trim());
+      part.querySelector(".copy-btn").textContent = "Tersalin";
+      setTimeout(() => part.querySelector(".copy-btn").textContent = "Salin bagian", 1400);
+    });
+  });
+  const allButton = document.getElementById("copy-all");
+  if (allButton) allButton.addEventListener("click", async () => {
+    const text = [...partsRoot.querySelectorAll(".part-text")].map((p) => p.textContent.trim()).join("\n\n");
+    await copyText(text);
+    document.getElementById("copy-all-status").textContent = "Semua bagian tersalin";
+    setTimeout(() => document.getElementById("copy-all-status").textContent = "", 1600);
+  });
+}
+
+const tweetList = document.getElementById("tweet-list");
+if (tweetList && selectedDay) {
+  const limit = 40;
+  let offset = 0, loading = false, hasMore = true;
+  const filter = document.getElementById("tweet-filter");
+  const loader = document.getElementById("tweet-loader");
+  function addBadge(parent, text, kind="") { const b=document.createElement("span"); b.className=`badge ${kind}`; b.textContent=text; parent.appendChild(b); }
+  function renderTweet(tweet) {
+    const card=document.createElement("article"); card.className="tweet";
+    const head=document.createElement("div"); head.className="tweet-head";
+    const author=document.createElement("span"); author.className="handle"; author.textContent="@"+(tweet.user||"unknown").replace(/^@/,""); head.appendChild(author);
+    if (tweet.is_techbro_id) addBadge(head,"Techbro","tech");
+    if (tweet.following === true) addBadge(head,"Kamu mengikuti","tech");
+    else if (tweet.following === false) addBadge(head,"Belum mengikuti");
+    else addBadge(head,"Status follow tidak tersedia");
+    const time=document.createElement("time"); time.textContent=tweet.created_at||""; head.appendChild(time);
+    const text=document.createElement("p"); text.className="tweet-text"; text.textContent=tweet.text||"";
+    card.append(head,text);
+    if (tweet.user_reasons?.length) { const why=document.createElement("div"); why.className="reasons"; why.textContent="Alasan: "+tweet.user_reasons.join(", "); card.appendChild(why); }
+    tweetList.appendChild(card);
+  }
+  async function loadMore(reset=false) {
+    if (loading || (!hasMore && !reset)) return;
+    loading=true; loader.textContent="Memuat tweet…";
+    if (reset) { offset=0; hasMore=true; tweetList.replaceChildren(); }
+    const params=new URLSearchParams({offset:String(offset),limit:String(limit),techbro_only:String(filter.value==="techbro")});
+    const response=await fetch(`/api/daily/${selectedDay}/tweets?${params}`);
+    if (!response.ok) { loader.textContent="Gagal memuat tweet."; loading=false; return; }
+    const data=await response.json();
+    data.tweets.forEach(renderTweet); offset=data.next_offset; hasMore=data.has_more;
+    loader.textContent=hasMore?"Scroll untuk memuat tweet berikutnya":"Semua tweet untuk tanggal ini sudah dimuat.";
+    if (offset===0) loader.textContent="Tidak ada tweet untuk filter ini.";
+    loading=false;
+  }
+  filter.addEventListener("change",()=>loadMore(true));
+  const observer=new IntersectionObserver((entries)=>{if(entries[0].isIntersecting) loadMore();},{rootMargin:"500px"});
+  observer.observe(document.getElementById("tweet-sentinel"));
+  loadMore();
+}
+</script>
+</body>
+</html>

@@ -22,8 +22,12 @@ services:
       - DATA_DIR=/data
       - ADACODE_API_KEY=${ADACODE_API_KEY}
       - ADACODE_MODEL=adacode-2.0
+      - ENABLE_VIDEO_RENDER=true
+      - PEXELS_API_KEY=${PEXELS_API_KEY:-}
     volumes:
-      - /home/isra_habibi/techbro/data:/data
+      - ./data:/data
+    ports:
+      - "127.0.0.1:8000:8000"
     expose:
       - "8000"
     restart: unless-stopped

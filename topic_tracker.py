@@ -4,35 +4,46 @@ Topic Tracker: extract + agregasi topik hangat dari tweet techbro Indonesia.
 Baca semua feed_*.json (akumulasi), kirim ke adaCODE 1x/hari -> topics_YYYYMMDD.json
 Biaya: 1 API call per run (bukan per tweet) -> quota aman.
 """
-import json, os, glob, datetime, httpx
+import json, os, glob, datetime, urllib.request
+from zoneinfo import ZoneInfo
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(BASE, "data")
+os.makedirs(DATA, exist_ok=True)
 KEY = os.environ.get("ADACODE_API_KEY", "")
-MODEL = os.environ.get("ADACODE_MODEL", "claude-sonnet-4-6")
+MODEL = os.environ.get("ADACODE_MODEL", "adacode-2.0")
 API = "https://api.adacode.ai/v1/chat/completions"
+LOCAL_TZ = ZoneInfo("Asia/Jakarta")
+WINDOW_HOURS = 24
 
 
-def parse_day(created_at):
-    """Twitter format -> YYYY-MM-DD (atau '' kalau gagal)."""
+def parse_timestamp(created_at):
     try:
-        return datetime.datetime.strptime(created_at, "%a %b %d %H:%M:%S %z %Y").strftime("%Y-%m-%d")
+        return datetime.datetime.strptime(
+            created_at, "%a %b %d %H:%M:%S %z %Y"
+        ).astimezone(LOCAL_TZ)
     except Exception:
-        return ""
+        return None
 
 
-def collect_tweets(days=14):
-    """Ambil tweet techbro dari N hari terakhir feed_*.json, sertakan field day."""
-    files = sorted(glob.glob(os.path.join(DATA, "feed_*.json")))
+def collect_tweets(window_hours=WINDOW_HOURS):
+    """Ambil tweet techbro dalam jendela waktu terakhir, berdasarkan waktu Jakarta."""
+    files = sorted(glob.glob(os.path.join(DATA, "feed_*.json")))[-14:]
+    now = datetime.datetime.now(LOCAL_TZ)
+    cutoff = now - datetime.timedelta(hours=window_hours)
     tweets = []
     seen = set()
-    for f in files[-days:]:
+    for f in files:
         try:
-            d = json.load(open(f))
+            with open(f, encoding="utf-8") as fh:
+                d = json.load(fh)
         except Exception:
             continue
         for t in d.get("tweets", []):
-            if not t.get("is_techbro_id"):
+            if not t.get("is_techbro_id") or not t.get("is_tech_tweet"):
+                continue
+            created = parse_timestamp(t.get("created_at", ""))
+            if not created or not cutoff <= created <= now:
                 continue
             key = t.get("id")
             if key in seen:
@@ -40,57 +51,78 @@ def collect_tweets(days=14):
             seen.add(key)
             tweets.append({
                 "user": t.get("user", ""),
-                "day": parse_day(t.get("created_at", "")),
+                "day": created.strftime("%Y-%m-%d %H:%M WIB"),
                 "text": (t.get("text") or "").replace("\n", " ").strip()[:400],
+                "created_at": created,
             })
+    tweets.sort(key=lambda tweet: tweet["created_at"], reverse=True)
+    for tweet in tweets:
+        del tweet["created_at"]
     return tweets
 
 
 def extract_topics(tweets):
     if not tweets:
         return []
+    if not KEY:
+        print("[warn] ADACODE_API_KEY belum di-set; ekstraksi topik dilewati.", file=__import__("sys").stderr)
+        return []
     # batasi ~60 tweet teratas biar prompt gak kepanjangan
     sample = tweets[:60]
     lines = "\n".join(f"[{t['day']}] @{t['user']}: {t['text']}" for t in sample)
     prompt = (
-        "Berikut kumpulan tweet dari komunitas techbro Indonesia (beberapa hari terakhir). "
-        "Setiap baris diawali [YYYY-MM-DD] yang menunjukkan hari tweet itu diposting.\n"
-        "Tugasmu: EXTRACT dan AGREGASI topik-topik hangat yang muncul. "
-        "Kelompokkan tweet serupa ke topik yang sama. Untuk tiap topik, beri:\n"
+        "Berikut kumpulan tweet dari komunitas techbro Indonesia dalam 24 jam terakhir "
+        "(waktu Asia/Jakarta). Setiap baris diawali waktu lokal saat tweet diposting.\n"
+        "Tugasmu: buat brief editorial yang membantu pembaca memahami obrolan, bukan sekadar daftar topik. "
+        "Kelompokkan tweet serupa. Pisahkan fakta yang tampak di tweet dari konteks umum; jangan mengarang angka, klaim, atau konsensus. "
+        "Kalau menambahkan konteks umum, jelaskan singkat dan hati-hati. Untuk tiap topik, beri:\n"
         "1. nama topik (singkat, 2-4 kata)\n"
         "2. jumlah tweet terkait (perkiraan)\n"
-        "3. 1-2 kalimat narasi (gaya santai Indo lo-gue) yang rangkum perdebatan/isu di topik itu\n"
-        "4. list handle yang terlibat (maks 5)\n"
-        "5. list hari (YYYY-MM-DD) di mana topik ini muncul, diambil dari prefix [tanggal] tiap tweet (field 'days')\n\n"
+        "3. summary: jelaskan apa yang sedang diperdebatkan/dibangun dan sudut pandang yang muncul, 2 kalimat\n"
+        "4. context: konteks dasar agar pembaca non-ahli paham istilah atau latar isu, 1 kalimat; bila tidak yakin, tulis null\n"
+        "5. value_added: analisis singkat kenapa isu ini penting atau trade-off yang perlu diperhatikan, 1 kalimat; tandai sebagai analisis, bukan fakta tweet\n"
+        "6. list handle yang terlibat (maks 5)\n"
+        "7. list tanggal (YYYY-MM-DD) saat topik muncul, berdasarkan waktu pada tiap baris (field 'days')\n\n"
         "Balas HANYA dalam JSON array, tanpa teks lain, format:\n"
-        '[{"topic":"...","count":N,"summary":"...","handles":["@a","@b"],"days":["2026-08-09","2026-08-10"]}, ...]\n\n'
+        '[{"topic":"...","count":N,"summary":"...","context":"...","value_added":"...","handles":["@a","@b"],"days":["2026-08-09"]}, ...]\n\n'
         "Tweets:\n" + lines
     )
     try:
-        r = httpx.post(API, headers={"Authorization": f"Bearer {KEY}",
-                        "Content-Type": "application/json"},
-                       json={"model": MODEL, "messages": [
-                           {"role": "system", "content": "Kamu agregator topik techbro ID. Balas JSON saja."},
-                           {"role": "user", "content": prompt}],
-                           "max_tokens": 1000, "temperature": 0.3}, timeout=60)
-        r.raise_for_status()
-        content = r.json()["choices"][0]["message"]["content"]
+        payload = json.dumps({"model": MODEL, "messages": [
+            {"role": "system", "content": "Kamu agregator topik techbro ID. Balas JSON saja."},
+            {"role": "user", "content": prompt}],
+            "max_tokens": 2400, "temperature": 0.3}).encode("utf-8")
+        req = urllib.request.Request(API, data=payload, headers={
+            "Authorization": f"Bearer {KEY}",
+            "Content-Type": "application/json",
+        })
+        with urllib.request.urlopen(req, timeout=60) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        content = data["choices"][0]["message"]["content"]
         # ambil JSON dalam teks
         start = content.find("[")
         end = content.rfind("]") + 1
         return json.loads(content[start:end])
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", "replace").strip()[:400]
+        print(f"[warn] extract gagal (HTTP {e.code}): {detail or e.reason}", file=__import__("sys").stderr)
+        return []
     except Exception as e:
         print(f"[warn] extract gagal: {e}", file=__import__("sys").stderr)
         return []
 
 
 def main():
-    today = datetime.datetime.utcnow().strftime("%Y%m%d")
-    tweets = collect_tweets(days=14)
-    print(f"[tracker] collected {len(tweets)} techbro tweets (14 hari)")
+    today = datetime.datetime.now(LOCAL_TZ).strftime("%Y%m%d")
+    tweets = collect_tweets()
+    print(f"[tracker] collected {len(tweets)} techbro tweets (24 jam terakhir)")
     topics = extract_topics(tweets)
+    if tweets and not topics:
+        print("[warn] tidak ada hasil topik valid; file topics lama dipertahankan", file=__import__("sys").stderr)
+        return 1
     out = {
         "date": today,
+        "window_hours": WINDOW_HOURS,
         "total_tweets_scanned": len(tweets),
         "topics": topics,
     }

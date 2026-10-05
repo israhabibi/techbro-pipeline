@@ -16,7 +16,7 @@ Jalankan:
 import json, os, sys, time, datetime, hashlib, argparse, urllib.request, urllib.error, urllib.parse
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-CREDS = os.path.join(BASE, "creds.json")
+CREDS = os.environ.get("CREDS_FILE", os.path.join(os.path.dirname(BASE), "creds.json"))
 DATA = os.path.join(BASE, "data")
 os.makedirs(DATA, exist_ok=True)
 
@@ -35,6 +35,8 @@ PG = dict(host="localhost", port=5432, dbname="healthmis",
 
 # ---- Twitter creds helpers ----
 def load_creds():
+    if not os.path.isfile(CREDS):
+        raise FileNotFoundError(f"Credentials file not found: {CREDS} (set CREDS_FILE to override)")
     with open(CREDS) as f:
         return json.load(f)
 

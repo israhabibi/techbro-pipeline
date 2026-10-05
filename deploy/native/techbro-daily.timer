@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Techbro daily digest every morning
+
+[Timer]
+OnCalendar=*-*-* 09:00:00 Asia/Jakarta
+Persistent=true
+RandomizedDelaySec=3m
+Unit=techbro-daily.service
+
+[Install]
+WantedBy=timers.target

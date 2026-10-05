@@ -4,11 +4,15 @@ Slice 3: gabung sources_*.json ke digest_*.json.
 Tambah section: "pantauan" (keyword news + tempo ekstra).
 Tidak mengubah section techbro/tempo/pinggir_jurang yang sudah ada.
 """
-import json, os, glob, datetime
+import json, os, glob, datetime, sys
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(BASE, "data")
 today = datetime.datetime.utcnow().strftime("%Y%m%d")
+
+if os.environ.get("ENABLE_SUPPLEMENTAL_RSS", "").lower() not in {"1", "true", "yes"}:
+    print("[skip] supplemental RSS merge disabled; set ENABLE_SUPPLEMENTAL_RSS=1 to enable")
+    raise SystemExit(0)
 
 def _latest(prefix):
     fs = sorted(glob.glob(os.path.join(DATA, f"{prefix}_*.json")))

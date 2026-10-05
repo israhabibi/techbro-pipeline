@@ -3,10 +3,10 @@
 X home-timeline scanner -> kategorisasi techbro Indonesia.
 Menulis hasil ke data/feed_YYYYMMDD.json
 """
-import json, os, sys, time, datetime, urllib.request, urllib.error, urllib.parse
+import json, os, sys, time, datetime, re, urllib.request, urllib.error, urllib.parse
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-CREDS = os.path.join(BASE, "creds.json")
+CREDS = os.environ.get("CREDS_FILE", os.path.join(os.path.dirname(BASE), "creds.json"))
 DATA = os.path.join(BASE, "data")
 os.makedirs(DATA, exist_ok=True)
 
@@ -29,7 +29,26 @@ TECH_WORDS = ["engineer", "developer", "founder", "cto", "programmer",
                "machine learning", "open source", "opensource", "python",
                "rust", "golang", "infra", "cloud", "security", "hacker"]
 
+# Kata/istilah yang cukup kuat untuk mengenali tweet teknis meski profilnya minim.
+TECH_TWEET_TERMS = [
+    "observability", "vibe coding", "software engineering", "software",
+    "programming", "programmer", "developer", "engineering", "engineer",
+    "backend", "frontend", "fullstack", "devops", "api", "sdk", "database",
+    "postgres", "redis", "kubernetes", "docker", "linux", "python",
+    "javascript", "typescript", "golang", "rust", "compiler", "open source",
+    "github", "machine learning", "deep learning", "neural network", "llm",
+    "gpu", "inference", "fine-tuning", "fine tuning", "cloud", "infrastructure",
+    "cybersecurity", "security vulnerability", "coding", "code review", "code",
+    "ngoding", "koding", "pull request", "ci/cd", "deployment", "deploy",
+    "microservice", "distributed systems", "web development", "database schema",
+    "ai tools", "ai video", "ai agent", "agent builds", "opus", "ultracode",
+    "elevenlabs", "hyperframes", "chatgpt", "claude", "codex", "gemini",
+    "video generation", "prompt engineering",
+]
+
 def load_creds():
+    if not os.path.isfile(CREDS):
+        raise FileNotFoundError(f"Credentials file not found: {CREDS} (set CREDS_FILE to override)")
     with open(CREDS) as f:
         return json.load(f)
 
@@ -70,7 +89,7 @@ def classify_user(u):
         if w in loc:
             loc_hit = w; reasons.append(f"loc:{w}"); score += 2; break
     # specific tech keywords (strong, not just "ai")
-    TECH_SPECIFIC = ["engineer", "developer", "founder", "co-founder", "cto",
+    TECH_SPECIFIC = ["engineer", "developer", "cto",
                      "programmer", "software", "startup", "tech", "coding",
                      "devops", "backend", "frontend", "machine learning",
                      "open source", "opensource", "python", "rust", "golang",
@@ -85,10 +104,22 @@ def classify_user(u):
     if not tech_hit and "ai" in blob and loc_hit:
         reasons.append("ai+loc"); score += 1
     # A user is techbro-ID if: reference, OR (indo location AND tech keyword)
-    is_tech = bool(reasons) and (score >= 3) and (
-        sn in REF_HANDLES or (loc_hit and tech_hit) or (tech_hit and score >= 4)
-    )
+    # AI + an Indonesian location is an intentional fallback signal (e.g.
+    # builders whose bio says "AI tools" but not developer/software).
+    ai_loc_hit = "ai+loc" in reasons
+    is_tech = bool(bool(reasons) and (score >= 3) and (
+        sn in REF_HANDLES or (loc_hit and tech_hit) or ai_loc_hit or (tech_hit and score >= 4)
+    ))
     return is_tech, reasons, score
+
+def detect_tech_tweet(text):
+    """Return the first strong technical signal in a tweet, if present."""
+    text = (text or "").lower()
+    for term in TECH_TWEET_TERMS:
+        pattern = rf"(?<!\w){re.escape(term)}(?!\w)"
+        if re.search(pattern, text):
+            return term
+    return None
 
 def main(pages=3):
     creds = load_creds()
@@ -117,15 +148,30 @@ def main(pages=3):
         if not cursor:
             break
         time.sleep(2)
+    # Use tweet content as fallback when profile metadata is inconclusive.
+    tweet_signals = {}
+    for t in all_tweets.values():
+        uid = t.get("user_id_str") or (t.get("user") or {}).get("id_str")
+        signal = detect_tech_tweet(t.get("text"))
+        if uid and signal:
+            tweet_signals.setdefault(uid, []).append(signal)
+
     # classify users
     classified = {}
     for uid, u in all_users.items():
         is_tb, reasons, score = classify_user(u)
+        signals = list(dict.fromkeys(tweet_signals.get(uid, [])))[:3]
+        if signals:
+            is_tb = True
+            score = max(score, 3)
+            reasons.extend(f"tweet:{signal}" for signal in signals)
         classified[uid] = {
             "screen_name": u.get("screen_name"),
             "name": u.get("name"),
             "location": u.get("location"),
             "followers": u.get("followers_count"),
+            # X only supplies this relationship flag for some timeline accounts.
+            "following": u.get("following") if isinstance(u.get("following"), bool) else None,
             "description": u.get("description"),
             "is_techbro_id": is_tb,
             "score": score,
@@ -142,8 +188,11 @@ def main(pages=3):
             "created_at": t.get("created_at"),
             "user": cu.get("screen_name"),
             "is_techbro_id": cu.get("is_techbro_id", False),
+            "following": cu.get("following"),
             "user_score": cu.get("score", 0),
             "user_reasons": cu.get("reasons", []),
+            "is_tech_tweet": bool(detect_tech_tweet(t.get("text"))),
+            "tweet_tech_signal": detect_tech_tweet(t.get("text")),
         })
     out_tweets.sort(key=lambda x: x.get("created_at") or "", reverse=True)
     tech_tweets = [x for x in out_tweets if x["is_techbro_id"]]

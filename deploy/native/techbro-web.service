@@ -1,0 +1,30 @@
+[Unit]
+Description=Techbro daily digest web app
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=techbro-web
+Group=techbro-data
+WorkingDirectory=/opt/techbro-pipeline/web/app
+EnvironmentFile=-/etc/techbro/techbro.env
+Environment=DATA_DIR=/opt/techbro-pipeline/data
+Environment=TEMPLATE_DIR=/opt/techbro-pipeline/web/app/templates
+Environment=ADACODE_MODEL=adacode-2.0
+Environment=ENABLE_VIDEO_RENDER=true
+ExecStart=/opt/techbro-pipeline/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1 --limit-concurrency 24 --timeout-keep-alive 5
+Restart=on-failure
+RestartSec=3
+MemoryHigh=260M
+MemoryMax=400M
+CPUQuota=80%
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+UMask=0027
+ReadWritePaths=/opt/techbro-pipeline/data/videos
+
+[Install]
+WantedBy=multi-user.target

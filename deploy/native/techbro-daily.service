@@ -1,0 +1,22 @@
+[Unit]
+Description=Scan X and build the daily Techbro digest
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=techbro
+Group=techbro-data
+WorkingDirectory=/opt/techbro-pipeline
+EnvironmentFile=/etc/techbro/techbro.env
+Environment=DATA_DIR=/opt/techbro-pipeline/data
+ExecStart=/bin/bash /opt/techbro-pipeline/deploy/native/run-daily.sh
+MemoryHigh=350M
+MemoryMax=480M
+CPUQuota=90%
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/techbro-pipeline/data /opt/techbro-pipeline/dataset
+UMask=0027

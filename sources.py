@@ -10,6 +10,7 @@ import json, os, sys, datetime, urllib.request, urllib.parse, xml.etree.ElementT
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(BASE, "data")
+os.makedirs(DATA, exist_ok=True)
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 
 # Keyword yang mau dipantau (bisa lo edit)
@@ -74,6 +75,10 @@ def fetch_tempo_rss():
 
 
 def main():
+    if os.environ.get("ENABLE_SUPPLEMENTAL_RSS", "").lower() not in {"1", "true", "yes"}:
+        print("[skip] supplemental Google News/Tempo RSS disabled; set ENABLE_SUPPLEMENTAL_RSS=1 to enable")
+        return
+
     today = datetime.datetime.utcnow().strftime("%Y%m%d")
     out = {"date": today, "keywords": {}, "tempo": []}
 
@@ -103,4 +108,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
