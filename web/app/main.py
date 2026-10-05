@@ -106,11 +106,20 @@ SYSTEM = (
 
 @app.get("/")
 def home(request: Request):
+    import glob
+    all_digests = []
+    for f in sorted(glob.glob(os.path.join(DATA_DIR, "digest_*.json"))):
+        try:
+            d = json.load(open(f))
+            if d.get("techbro") and d["techbro"].get("themes"):
+                all_digests.append(d)
+        except:
+            pass
+
     date = _today_prefix()
     feed = _latest("feed") or {"tweets": [], "techbro_tweets": 0,
                                "total_tweets": 0, "total_users": 0}
     tempo = _latest("tempo") or {"articles": [], "count": 0}
-    digest = _latest("digest") or None
     news = _latest("news_monitor") or None
 
     by_author = {}
@@ -129,13 +138,13 @@ def home(request: Request):
         "date": date,
         "feed": feed,
         "tempo": tempo,
-        "digest": digest,
+        "all_digests": all_digests,
         "authors": authors,
         "tempo_articles": tempo.get("articles", [])[:40],
-        "has_digest": digest is not None,
-        "pantauan": digest.get("pantauan") if digest else None,
+        "pantauan": None,
         "topics": _latest_topics(),
         "news": news,
+        "has_digest": len(all_digests) > 0,
     })
 
 

@@ -23,14 +23,6 @@ http:
       loadBalancer:
         servers:
           - url: "http://uptime-kuma:3001"
-    chatbot:
-      loadBalancer:
-        servers:
-          - url: "http://chatbot:8000"
-    snbp:
-      loadBalancer:
-        servers:
-          - url: "http://snbp-web:80"
     ninerouter:
       loadBalancer:
         servers:
@@ -59,12 +51,6 @@ http:
       entryPoints:
         - websecure
       service: uptime-kuma
-      priority: 50
-    chat-domain:
-      rule: "Host(`chat.airflow.my.id`)"
-      entryPoints:
-        - websecure
-      service: chatbot
       priority: 50
     digest-ip:
       rule: "Host(`35.209.136.180`)"
@@ -110,22 +96,8 @@ http:
         - web
       middlewares:
         - redirect-https
-      service: chatbot
-      priority: 50
-    snbp-domain:
-      rule: "Host(`snbp.airflow.my.id`)"
-      entryPoints:
-        - websecure
-      service: snbp
-      priority: 50
-    snbp-redirect:
-      rule: "Host(`snbp.airflow.my.id`)"
-      entryPoints:
-        - web
-      middlewares:
-        - redirect-https
-      service: snbp
-      priority: 50
+      priority: 1
+      service: noop@internal
     traefik-dashboard:
       rule: "Host(`traefik.airflow.my.id`)"
       entryPoints:
