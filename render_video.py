@@ -30,6 +30,16 @@ def sentences(text):
     return [part.strip() for part in re.split(r"(?<=[.!?])\s+", text.strip()) if part.strip()]
 
 
+def caption_width(font_size):
+    """Approximate characters per line on the 1080-wide canvas for DejaVu Sans.
+
+    Average advance width is ~0.55em, so a 64px face fits ~28 characters in the
+    ~1000px usable area. Keeps wrapping consistent with the rendered font size.
+    """
+    usable = 1080 - 2 * max(40, round(font_size * 0.9))
+    return max(14, int(usable / (font_size * 0.55)))
+
+
 def wrap_caption(text, width=42):
     words, lines, current = text.split(), [], ""
     for word in words:
@@ -44,11 +54,11 @@ def wrap_caption(text, width=42):
     return ["\n".join(lines[i:i + 2]) for i in range(0, len(lines), 2)]
 
 
-def write_srt(text, duration, destination):
+def write_srt(text, duration, destination, width=42):
     units = []
     for sentence in sentences(text):
         words = sentence.split()
-        cards = wrap_caption(sentence)
+        cards = wrap_caption(sentence, width)
         weights = [max(1, len(card.split())) for card in cards]
         for card, weight in zip(cards, weights):
             units.append((card, weight))
@@ -59,6 +69,67 @@ def write_srt(text, duration, destination):
         blocks.append(f"{number}\n{timestamp(elapsed)} --> {timestamp(end)}\n{caption}\n")
         elapsed = end
     destination.write_text("\n".join(blocks), encoding="utf-8")
+
+
+def ass_time(seconds):
+    centiseconds = max(0, round(seconds * 100))
+    hours, centiseconds = divmod(centiseconds, 3_600_000)
+    minutes, centiseconds = divmod(centiseconds, 60_000)
+    secs, centiseconds = divmod(centiseconds, 100)
+    return f"{hours:d}:{minutes:02d}:{secs:02d}.{centiseconds:02d}"
+
+
+def escape_ass(text):
+    return text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
+
+
+# Style tokens matched to the reference frame analysis (589x1280 sample):
+# - Title: mid-gray text (~RGB 128,128,128) in the upper band y=128-256 (~10-20%).
+# - Caption: bold white text on a sepia/brown box (~RGB 128,112,96) at y=1024-1088
+#   (~80-85%), i.e. MarginV ~288px on the 1920px canvas.
+ASS_HEADER = """[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Title,DejaVu Sans,{title_size},&H00808080,&H00FFFFFF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,2,0,8,80,80,{title_margin},1
+Style: Caption,DejaVu Sans,{font_size},&H00FFFFFF,&H00FFFFFF,&HC0000000,&H00607080,1,0,0,0,100,100,0,0,3,{caption_pad},0,2,70,70,{caption_margin},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+
+
+def write_ass(text, duration, destination, title, font_size):
+    """Styled ASS: gray title pinned to the upper band, boxed captions near the
+    lower third — mirroring the reference Shorts layout instead of centered subs."""
+    lines = [ASS_HEADER.format(
+        title_size=max(40, round(font_size * 0.85)),
+        title_margin=round(1920 * 0.10),
+        font_size=font_size,
+        caption_pad=max(6, round(font_size / 8)),
+        caption_margin=384,
+    )]
+    if title:
+        lines.append(f"Dialogue: 0,{ass_time(0)},{ass_time(duration)},Title,,0,0,0,,"
+                     f"{escape_ass(title)}")
+    # First pass: collect caption cards with placeholder timing.
+    caption_cards = []
+    for sentence in sentences(text):
+        for card in wrap_caption(sentence, caption_width(font_size)):
+            caption_cards.append(escape_ass(card.replace(chr(10), chr(92) + "N")))
+    # Second pass: assign each card an equal time slice with correct field
+    # order (Layer,Start,End,Style,...).
+    slice_duration = duration / max(1, len(caption_cards))
+    for index, card_text in enumerate(caption_cards):
+        start = ass_time(index * slice_duration)
+        end = ass_time(duration if index == len(caption_cards) - 1
+                       else (index + 1) * slice_duration)
+        lines.append(f"Dialogue: 0,{start},{end},Caption,,0,0,0,,{card_text}")
+    destination.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def script_groups(text, scene_count):
@@ -80,6 +151,12 @@ def main():
     parser.add_argument("--assets-dir", required=True, type=Path, help="Contains scene-01.mp4, scene-02.mp4, ...")
     parser.add_argument("--audio", required=True, type=Path, help="TTS narration file (WAV/MP3/M4A)")
     parser.add_argument("--output", required=True, type=Path, help="New MP4 output path; existing files are not overwritten")
+    parser.add_argument("--title", default="",
+                        help="Static title shown in the upper band for the whole video (techbro overlay style)")
+    parser.add_argument("--font-size", type=int, default=64,
+                        help="Subtitle font size in pixels for the 1080x1920 canvas (default: 64)")
+    parser.add_argument("--margin-v", type=int, default=420,
+                        help="Subtitle bottom margin in pixels; larger keeps captions higher up (default: 420)")
     args = parser.parse_args()
 
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
@@ -114,9 +191,10 @@ def main():
 
     args.output = args.output.resolve()
     srt_path = args.output.with_suffix(".srt")
+    ass_path = args.output.with_suffix(".ass")
     credits_path = args.output.with_suffix(".credits.txt")
-    if any(path.exists() for path in (args.output, srt_path, credits_path)):
-        parser.error("output MP4, SRT, or credits file already exists; choose a new output name")
+    if any(path.exists() for path in (args.output, srt_path, ass_path, credits_path)):
+        parser.error("output MP4, ASS, SRT, or credits file already exists; choose a new output name")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     duration = probe_duration(args.audio)
     if duration <= 0:
@@ -126,7 +204,8 @@ def main():
     weights = [max(1, len(group.split())) for group in groups]
     total_weight = sum(weights)
     clip_durations = [duration * weight / total_weight for weight in weights]
-    write_srt(narration, duration, srt_path)
+    write_srt(narration, duration, srt_path, caption_width(args.font_size))
+    write_ass(narration, duration, ass_path, args.title, args.font_size)
 
     command = ["ffmpeg", "-hide_banner", "-loglevel", "warning"]
     for _, clip in clips:
@@ -141,12 +220,12 @@ def main():
             f"setpts=PTS-STARTPTS[v{index}]"
         )
     concat_inputs = "".join(f"[v{index}]" for index in range(len(clips)))
-    srt_filter = escape_filter_path(srt_path)
+    srt_filter = escape_filter_path(ass_path)
+    # Styled ASS (techbro overlay): gray title in the upper band, bold white
+    # captions on a sepia box near the lower third — see write_ass().
     filters.append(
         f"{concat_inputs}concat=n={len(clips)}:v=1:a=0,"
-        f"subtitles='{srt_filter}':force_style='FontName=DejaVu Sans,FontSize=18,"
-        "PrimaryColour=&H00FFFFFF,OutlineColour=&H80000000,BorderStyle=1,"
-        "Outline=2,Shadow=1,Alignment=2,MarginV=150'[video]"
+        f"subtitles='{srt_filter}'[video]"
     )
     command.extend(["-filter_complex", ";".join(filters), "-map", "[video]",
                     "-map", f"{audio_index}:a:0", "-t", f"{duration:.3f}",
@@ -157,6 +236,7 @@ def main():
         subprocess.run(command, check=True)
     except subprocess.CalledProcessError as exc:
         srt_path.unlink(missing_ok=True)
+        ass_path.unlink(missing_ok=True)
         parser.error(f"FFmpeg render failed (exit {exc.returncode}); verify that clips include video and FFmpeg has libass")
 
     credits = ["Asset credits — verify these match each source page before publishing."]
@@ -167,6 +247,7 @@ def main():
     credits_path.write_text("\n".join(credits) + "\n", encoding="utf-8")
     print(f"Rendered: {args.output}")
     print(f"Subtitles: {srt_path}")
+    print(f"Styled overlay: {ass_path}")
     print(f"Credits: {credits_path}")
     return 0
 
