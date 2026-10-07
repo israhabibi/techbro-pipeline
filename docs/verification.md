@@ -33,6 +33,25 @@ all quality checks, audits, and HTTP startup. A transient Docker startup
 connection reset prompted a verifier retry fix and an additional regression
 test before the final post-deployment pull and verification.
 
+## Final post-deployment result
+
+- Pulled `main` after deployment, then cloned from the remote again into an
+  independent directory and checked out `b2d7c988d349d41b6d8071ce927bebd3ceb94134`.
+- Fresh `uv sync --locked` and `npm ci` succeeded without copying credentials,
+  `.env`, the original virtual environment, or original runtime data.
+- `make check` passed: 70 Python tests, 10 Node tests, Python/JavaScript lint and
+  formatting checks, and wheel/source-distribution builds.
+- The real HTTP smoke check passed using synthetic data; both dependency audits
+  passed. `git status --porcelain` was empty after verification.
+- Installed Python modules and templates in the deployed container matched
+  the Git checkout byte for byte. Their aggregate SHA-256 was
+  `d706230a3db36eeca6ffb248929898d9af98947ec68c6cdb6169edb1f3fd5ca9`.
+- The deployed `digest-web` container is healthy, runs as UID 1000, and publishes
+  `127.0.0.1:8000`. The final record is a documentation-only follow-up commit;
+  it does not change the verified application or dependency locks.
+- Local diagnostic log: `/tmp/techbro-post-deploy-verification.log`.
+  Independent checkout retained at `/tmp/techbro-reproduce-2jmijupl`.
+
 ```sh
 uv sync --locked
 npm ci

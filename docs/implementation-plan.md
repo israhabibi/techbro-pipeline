@@ -52,4 +52,7 @@ Repository visibility stays unchanged. Production data and secrets remain local.
 - [x] Implement package, configuration, correctness, and validation changes.
 - [x] Add and pass tests, static checks, dependency checks, and packaging checks.
 - [x] Verify clean installation and container runtime without local inputs.
-- [ ] Commit, push, deploy locally, and verify a fresh remote clone.
+- [x] Commit, push, deploy locally, and verify a fresh remote clone.
+
+Completed: see `docs/verification.md` for the actual post-deployment revision,
+results, and external integration prerequisites. Repository visibility is unchanged.
