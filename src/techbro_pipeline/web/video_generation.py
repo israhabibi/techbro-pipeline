@@ -1,17 +1,18 @@
 """On-demand local TTS + FFmpeg video assembly for a daily topic draft."""
+
 import datetime as dt
 import json
 import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
 from zoneinfo import ZoneInfo
-
 
 TZ = ZoneInfo("Asia/Jakarta")
 PEXELS_API = "https://api.pexels.com/v1/videos/search"
@@ -32,7 +33,13 @@ def _json_file(path):
 
 
 def _safe_filter_path(path):
-    return str(path.resolve()).replace("\\", "\\\\").replace(":", r"\:").replace("'", r"\'").replace(",", r"\,")
+    return (
+        str(path.resolve())
+        .replace("\\", "\\\\")
+        .replace(":", r"\:")
+        .replace("'", r"\'")
+        .replace(",", r"\,")
+    )
 
 
 def _sentence_units(text):
@@ -49,7 +56,7 @@ def _caption_lines(text, width=34):
             current = f"{current} {word}".strip()
     if current:
         lines.append(current)
-    return ["\n".join(lines[i:i + 2]) for i in range(0, len(lines), 2)]
+    return ["\n".join(lines[i : i + 2]) for i in range(0, len(lines), 2)]
 
 
 def _srt_time(seconds):
@@ -90,21 +97,34 @@ def _search_terms(topic):
 def _pexels_asset(query, api_key, destination):
     if not api_key:
         return None
-    params = urllib.parse.urlencode({"query": query, "orientation": "portrait", "per_page": 5, "size": "medium"})
-    req = urllib.request.Request(f"{PEXELS_API}?{params}", headers={"Authorization": api_key, "User-Agent": "TechbroDailyVideo/1.0"})
+    params = urllib.parse.urlencode(
+        {"query": query, "orientation": "portrait", "per_page": 5, "size": "medium"}
+    )
+    req = urllib.request.Request(
+        f"{PEXELS_API}?{params}",
+        headers={"Authorization": api_key, "User-Agent": "TechbroDailyVideo/1.0"},
+    )
     try:
         with urllib.request.urlopen(req, timeout=12) as response:
             payload = json.loads(response.read().decode("utf-8"))
         videos = payload.get("videos") or []
         for video in videos:
-            files = [f for f in video.get("video_files", [])
-                     if f.get("file_type") == "video/mp4" and f.get("link")]
+            files = [
+                f
+                for f in video.get("video_files", [])
+                if f.get("file_type") == "video/mp4" and f.get("link")
+            ]
             files.sort(key=lambda f: (f.get("width") or 99999, f.get("height") or 99999))
             for item in files:
                 parsed = urllib.parse.urlparse(item["link"])
-                if parsed.scheme != "https" or parsed.hostname not in {"player.vimeo.com", "videos.pexels.com"}:
+                if parsed.scheme != "https" or parsed.hostname not in {
+                    "player.vimeo.com",
+                    "videos.pexels.com",
+                }:
                     continue
-                download = urllib.request.Request(item["link"], headers={"User-Agent": "TechbroDailyVideo/1.0"})
+                download = urllib.request.Request(
+                    item["link"], headers={"User-Agent": "TechbroDailyVideo/1.0"}
+                )
                 with urllib.request.urlopen(download, timeout=25) as media:
                     if int(media.headers.get("Content-Length", "0") or 0) > MAX_CLIP_BYTES:
                         continue
@@ -142,12 +162,14 @@ def _render_ffmpeg(clips, titles, voice_path, srt_path, duration, output):
     total = sum(lengths)
     durations = [duration * size / total for size in lengths]
     input_index = 0
-    for index, (clip, title) in enumerate(zip(clips, titles["_titles"])):
+    for index, (clip, _title) in enumerate(zip(clips, titles["_titles"], strict=True)):
         if clip:
             command.extend(["-stream_loop", "-1", "-i", str(clip)])
         else:
             color = ["0x11251f", "0x181d33", "0x2b1d2d"][index % 3]
-            command.extend(["-f", "lavfi", "-i", f"color=c={color}:s=720x1280:r=25:d={durations[index]:.3f}"])
+            command.extend(
+                ["-f", "lavfi", "-i", f"color=c={color}:s=720x1280:r=25:d={durations[index]:.3f}"]
+            )
         title_path = Path(titles["_title_files"][index])
         title_filter_path = _safe_filter_path(title_path)
         common = (
@@ -171,14 +193,46 @@ def _render_ffmpeg(clips, titles, voice_path, srt_path, duration, output):
         "PrimaryColour=&H00FFFFFF,OutlineColour=&H90000000,BorderStyle=1,"
         "Outline=2,Shadow=1,Alignment=2,MarginV=110'[video]"
     )
-    command.extend(["-filter_complex", ";".join(filters), "-map", "[video]", "-map", f"{audio_index}:a:0",
-                    "-t", f"{duration:.3f}", "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
-                    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "27", "-pix_fmt", "yuv420p",
-                    "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", str(output)])
+    command.extend(
+        [
+            "-filter_complex",
+            ";".join(filters),
+            "-map",
+            "[video]",
+            "-map",
+            f"{audio_index}:a:0",
+            "-t",
+            f"{duration:.3f}",
+            "-af",
+            "loudnorm=I=-16:TP=-1.5:LRA=11",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-crf",
+            "27",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "96k",
+            "-movflags",
+            "+faststart",
+            str(output),
+        ]
+    )
     subprocess.run(command, check=True, timeout=300)
 
 
 def render_daily_video(data_dir, day, script, pexels_key="", assets_dir=None):
+    try:
+        return _render_daily_video(data_dir, day, script, pexels_key, assets_dir)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise VideoGenerationError("Local video tools could not complete rendering") from exc
+
+
+def _render_daily_video(data_dir, day, script, pexels_key="", assets_dir=None):
     if not re.fullmatch(r"\d{8}", day):
         raise VideoGenerationError("Format tanggal tidak valid")
     script = re.sub(r"\s+", " ", (script or "")).strip()
@@ -203,7 +257,9 @@ def render_daily_video(data_dir, day, script, pexels_key="", assets_dir=None):
     if len(existing) >= MAX_DAILY_RENDERS:
         raise VideoGenerationError(f"Batas {MAX_DAILY_RENDERS} render per hari tercapai")
     if len(list((base / "videos").glob("*/techbro-*.mp4"))) >= MAX_TOTAL_RENDERS:
-        raise VideoGenerationError("Penyimpanan penuh (maksimal 500 video); pindahkan/hapus video lama terlebih dahulu")
+        raise VideoGenerationError(
+            "Penyimpanan penuh (maksimal 500 video); pindahkan/hapus video lama terlebih dahulu"
+        )
     stamp = dt.datetime.now(TZ).strftime("%H%M%S")
     suffix = os.urandom(4).hex()
     stem = f"techbro-{day}-{stamp}-{suffix}"
@@ -214,21 +270,65 @@ def render_daily_video(data_dir, day, script, pexels_key="", assets_dir=None):
     with tempfile.TemporaryDirectory(prefix="techbro-video-") as temp_name:
         temp = Path(temp_name)
         voice_path = temp / "voice.mp3"
-        text = subprocess.run(
-            ["python3", "-m", "edge_tts", "--voice", "id-ID-GadisNeural",
-             "--text", script, "--write-media", str(voice_path)],
-            capture_output=True, text=True, timeout=120)
-        if text.returncode or not voice_path.exists() or voice_path.stat().st_size < 1000:
+        backend = os.environ.get("TTS_BACKEND", "local")
+        if backend not in {"local", "edge"}:
+            raise VideoGenerationError("TTS_BACKEND must be local or edge")
+        text = None
+        if backend == "edge":
+            text = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "edge_tts",
+                    "--voice",
+                    "id-ID-GadisNeural",
+                    "--text",
+                    script,
+                    "--write-media",
+                    str(voice_path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        if (
+            text is None
+            or text.returncode
+            or not voice_path.exists()
+            or voice_path.stat().st_size < 1000
+        ):
             # fallback ke espeak-ng lokal
+            if not shutil.which("espeak-ng"):
+                raise VideoGenerationError("Dependensi lokal belum terpasang: espeak-ng")
             voice_path = temp / "voice.wav"
-            text = subprocess.run(["espeak-ng", "-v", "id", "-s", "158", "-w", str(voice_path), "--stdin"],
-                                  input=script, text=True, capture_output=True, timeout=90)
+            text = subprocess.run(
+                ["espeak-ng", "-v", "id", "-s", "158", "-w", str(voice_path), "--stdin"],
+                input=script,
+                text=True,
+                capture_output=True,
+                timeout=90,
+            )
             if text.returncode or not voice_path.exists() or voice_path.stat().st_size < 1000:
                 raise VideoGenerationError("TTS gagal membuat audio Bahasa Indonesia")
         try:
-            duration = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
-                                             "-of", "default=noprint_wrappers=1:nokey=1", str(voice_path)],
-                                            check=True, capture_output=True, text=True, timeout=10).stdout.strip())
+            duration = float(
+                subprocess.run(
+                    [
+                        "ffprobe",
+                        "-v",
+                        "error",
+                        "-show_entries",
+                        "format=duration",
+                        "-of",
+                        "default=noprint_wrappers=1:nokey=1",
+                        str(voice_path),
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                ).stdout.strip()
+            )
         except (ValueError, subprocess.SubprocessError) as exc:
             raise VideoGenerationError("Durasi audio TTS tidak bisa dibaca") from exc
         if duration > 100:
@@ -249,10 +349,15 @@ def render_daily_video(data_dir, day, script, pexels_key="", assets_dir=None):
                 target = temp / f"scene-{index}.mp4"
                 shutil.copy(scene_files[index - 1], target)
                 clips.append(target)
-                credits.append({"type": "local", "topic": title,
-                                "source": str(scene_files[index - 1]),
-                                "creator": "aset lokal",
-                                "license": "Aset milik sendiri — pastikan lisensi footage"})
+                credits.append(
+                    {
+                        "type": "local",
+                        "topic": title,
+                        "source": str(scene_files[index - 1]),
+                        "creator": "aset lokal",
+                        "license": "Aset milik sendiri — pastikan lisensi footage",
+                    }
+                )
                 continue
             asset = _pexels_asset(_search_terms(title), pexels_key, downloaded)
             if asset:
@@ -261,13 +366,20 @@ def render_daily_video(data_dir, day, script, pexels_key="", assets_dir=None):
                 credits.append(asset)
             else:
                 clips.append(None)
-                credits.append({"type": "generated", "topic": title,
-                                "source": "Motion-card dibuat lokal dengan FFmpeg; tidak memakai footage eksternal."})
+                credits.append(
+                    {
+                        "type": "generated",
+                        "topic": title,
+                        "source": "Motion-card dibuat lokal dengan FFmpeg; tidak memakai footage eksternal.",
+                    }
+                )
 
-        subtitles = _sentence_units(script)
         _write_srt(script, duration, srt_path)
-        title_config = {"_groups": script_groups, "_titles": [t.get("topic") or f"Topik {i+1}" for i, t in enumerate(topics)],
-                        "_title_files": title_files}
+        title_config = {
+            "_groups": script_groups,
+            "_titles": [t.get("topic") or f"Topik {i + 1}" for i, t in enumerate(topics)],
+            "_title_files": title_files,
+        }
         try:
             _render_ffmpeg(clips, title_config, voice_path, srt_path, duration, output)
         except (subprocess.SubprocessError, OSError) as exc:
@@ -275,10 +387,25 @@ def render_daily_video(data_dir, day, script, pexels_key="", assets_dir=None):
             output.unlink(missing_ok=True)
             raise VideoGenerationError(f"FFmpeg gagal merender video: {exc}") from exc
 
-    credits_path.write_text(json.dumps({"date": day, "assets": credits,
-                                       "disclaimer": "Naskah dibuat dengan bantuan AI. Voice-over disintesis lokal."},
-                                      ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    return {"filename": output.name, "srt": srt_path.name, "credits": credits_path.name,
-            "duration_seconds": round(duration, 1), "pexels_used": sum(a["type"] == "pexels" for a in credits),
-            "local_clips": sum(a["type"] == "local" for a in credits),
-            "motion_cards": sum(a["type"] == "generated" for a in credits)}
+    credits_path.write_text(
+        json.dumps(
+            {
+                "date": day,
+                "assets": credits,
+                "disclaimer": "Naskah dibuat dengan bantuan AI. Voice-over disintesis lokal.",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return {
+        "filename": output.name,
+        "srt": srt_path.name,
+        "credits": credits_path.name,
+        "duration_seconds": round(duration, 1),
+        "pexels_used": sum(a["type"] == "pexels" for a in credits),
+        "local_clips": sum(a["type"] == "local" for a in credits),
+        "motion_cards": sum(a["type"] == "generated" for a in credits),
+    }

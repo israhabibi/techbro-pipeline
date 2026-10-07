@@ -1,7 +1,6 @@
-airflow.my.id {
-	# Replace the placeholder with: caddy hash-password --plaintext 'a-strong-password'
-	basic_auth {
-		isra REPLACE_WITH_CADDY_PASSWORD_HASH
-	}
-	reverse_proxy 127.0.0.1:8000
+techbro.example.com {
+    basic_auth {
+        viewer REPLACE_WITH_CADDY_PASSWORD_HASH
+    }
+    reverse_proxy 127.0.0.1:8000
 }

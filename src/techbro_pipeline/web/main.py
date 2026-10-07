@@ -4,26 +4,39 @@
 Reads JSON produced by scan.py / sources.py / topic_tracker.py /
 build_threads_draft.py from /data (host mount).
 """
-import json, os, glob, datetime, re, threading
-from fastapi import FastAPI, Request, Query, HTTPException
-from fastapi.responses import JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from starlette.concurrency import run_in_threadpool
+
+import glob
+import json
+import os
+import re
+import threading
+from typing import Literal
+
 import httpx
-from video_generation import VideoGenerationError, render_daily_video
-from pipeline_status import build_status
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from starlette.concurrency import run_in_threadpool
+
+from techbro_pipeline.config import Settings, day_stamp
+from techbro_pipeline.web.pipeline_status import build_status
+from techbro_pipeline.web.video_generation import VideoGenerationError, render_daily_video
 
 app = FastAPI()
-DATA_DIR = os.environ.get("DATA_DIR", "/data")
+DATA_DIR = str(Settings.from_env().data_dir)
 ADACODE_KEY = os.environ.get("ADACODE_API_KEY", "")
-ADACODE_MODEL = os.environ.get("ADACODE_MODEL", "claude-sonnet-4-6")
+ADACODE_MODEL = os.environ.get("ADACODE_MODEL", "adacode-2.0")
 ADACODE_BASE = "https://api.adacode.ai/v1/chat/completions"
 TEMPLATE_DIR = os.environ.get(
     "TEMPLATE_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 )
 TEMPLATES = Jinja2Templates(directory=TEMPLATE_DIR)
-VIDEO_RENDER_ENABLED = os.environ.get("ENABLE_VIDEO_RENDER", "false").lower() in {"1", "true", "yes"}
+VIDEO_RENDER_ENABLED = os.environ.get("ENABLE_VIDEO_RENDER", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+}
 PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY", "")
 VIDEO_RENDER_LOCK = threading.Lock()
 
@@ -32,10 +45,7 @@ def _latest(prefix):
     files = sorted(glob.glob(os.path.join(DATA_DIR, prefix, f"{prefix}_*.json")))
     if not files:
         return None
-    try:
-        return json.load(open(files[-1]))
-    except Exception:
-        return None
+    return _load_json(files[-1])
 
 
 def _latest_topics():
@@ -43,7 +53,7 @@ def _latest_topics():
 
 
 def _today_prefix():
-    return datetime.datetime.utcnow().strftime("%Y%m%d")
+    return day_stamp()
 
 
 def _daily_dates():
@@ -58,7 +68,8 @@ def _daily_dates():
 def _load_json(path):
     try:
         with open(path, encoding="utf-8") as fh:
-            return json.load(fh)
+            data = json.load(fh)
+            return data if isinstance(data, dict) else None
     except (OSError, ValueError):
         return None
 
@@ -75,7 +86,7 @@ def _build_context():
     if topics and topics.get("topics"):
         parts.append("### TOPIK HANGAT TECHBRO (24 jam terakhir)")
         for t in topics["topics"]:
-            line = f"\n**{t.get('topic')}** ({t.get('count')} tweet): {t.get('summary','')}"
+            line = f"\n**{t.get('topic')}** ({t.get('count')} tweet): {t.get('summary', '')}"
             if t.get("context"):
                 line += f"\n  Konteks: {t['context']}"
             if t.get("value_added"):
@@ -90,8 +101,10 @@ def _build_context():
             counts[t["user"]] = counts.get(t["user"], 0) + 1
     if counts:
         parts.append("\n### KONTRIBUTOR TERATAS")
-        parts.extend(f"- @{user}: {n} tweet"
-                     for user, n in sorted(counts.items(), key=lambda kv: -kv[1])[:10])
+        parts.extend(
+            f"- @{user}: {n} tweet"
+            for user, n in sorted(counts.items(), key=lambda kv: -kv[1])[:10]
+        )
 
     sources = _latest("sources")
     if sources:
@@ -130,26 +143,41 @@ def daily_page(request: Request, day: str = None):
     dates = _daily_dates()
     selected = day if day in dates else (dates[0] if dates else None)
     feed = _load_json(os.path.join(DATA_DIR, "feed", f"feed_{selected}.json")) if selected else None
-    topics = _load_json(os.path.join(DATA_DIR, "topics", f"topics_{selected}.json")) if selected else None
-    draft = _load_json(os.path.join(DATA_DIR, "threads", f"threads_draft_{selected}.json")) if selected else None
+    topics = (
+        _load_json(os.path.join(DATA_DIR, "topics", f"topics_{selected}.json"))
+        if selected
+        else None
+    )
+    draft = (
+        _load_json(os.path.join(DATA_DIR, "threads", f"threads_draft_{selected}.json"))
+        if selected
+        else None
+    )
     if selected and not draft:
         old_draft = os.path.join(DATA_DIR, "threads", f"threads_draft_{selected}.txt")
         try:
             with open(old_draft, encoding="utf-8") as fh:
                 legacy_parts = [p.strip() for p in fh.read().split("\n\n---\n\n") if p.strip()]
-            draft = {"status": "draft", "parts": [
-                {"number": i, "text": part} for i, part in enumerate(legacy_parts, start=1)
-            ]}
+            draft = {
+                "status": "draft",
+                "parts": [
+                    {"number": i, "text": part} for i, part in enumerate(legacy_parts, start=1)
+                ],
+            }
         except OSError:
             pass
-    return TEMPLATES.TemplateResponse(request=request, name="daily.html", context={
-        "request": request,
-        "dates": dates,
-        "selected_day": selected,
-        "feed": feed or {},
-        "topics": (topics or {}).get("topics", []),
-        "draft": draft,
-    })
+    return TEMPLATES.TemplateResponse(
+        request=request,
+        name="daily.html",
+        context={
+            "request": request,
+            "dates": dates,
+            "selected_day": selected,
+            "feed": feed or {},
+            "topics": (topics or {}).get("topics", []),
+            "draft": draft,
+        },
+    )
 
 
 @app.get("/api/daily/{day}/tweets")
@@ -166,7 +194,7 @@ def daily_tweets(
     if techbro_only:
         tweets = [tweet for tweet in tweets if tweet.get("is_techbro_id")]
     tweets = sorted(tweets, key=lambda tweet: tweet.get("created_at") or "", reverse=True)
-    page = tweets[offset:offset + limit]
+    page = tweets[offset : offset + limit]
     next_offset = offset + len(page)
     return {
         "day": day,
@@ -186,28 +214,35 @@ async def generate_daily_video(day: str, request: Request):
         raise HTTPException(status_code=404, detail="Tanggal tidak ditemukan")
     try:
         body = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Request JSON tidak valid")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Request JSON tidak valid") from exc
     script = body.get("voiceover") if isinstance(body, dict) else None
-    assets_dir = body.get("assets_dir") if isinstance(body, dict) else None
-    if assets_dir is not None and not isinstance(assets_dir, str):
-        raise HTTPException(status_code=422, detail="assets_dir harus string")
+    # Local filesystem access is selected by the administrator, never by a request.
+    assets_dir = os.environ.get("VIDEO_ASSETS_DIR")
+    if isinstance(body, dict) and body.get("assets_dir"):
+        raise HTTPException(status_code=422, detail="assets_dir is administrator configuration")
     if not isinstance(script, str) or not script.strip() or len(script) > 1800:
         raise HTTPException(status_code=422, detail="Naskah wajib diisi (maksimal 1.800 karakter)")
     if not VIDEO_RENDER_LOCK.acquire(blocking=False):
-        raise HTTPException(status_code=409, detail="Video lain sedang dirender; tunggu sampai selesai")
+        raise HTTPException(
+            status_code=409, detail="Video lain sedang dirender; tunggu sampai selesai"
+        )
     try:
         result = await run_in_threadpool(
             render_daily_video, DATA_DIR, day, script, PEXELS_API_KEY, assets_dir
         )
     except VideoGenerationError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     finally:
         VIDEO_RENDER_LOCK.release()
     base = f"/api/daily/{day}/video/{result['filename']}"
-    return {"ok": True, **result, "video_url": base,
-            "subtitle_url": f"/api/daily/{day}/video/{result['srt']}",
-            "credits_url": f"/api/daily/{day}/video/{result['credits']}"}
+    return {
+        "ok": True,
+        **result,
+        "video_url": base,
+        "subtitle_url": f"/api/daily/{day}/video/{result['srt']}",
+        "credits_url": f"/api/daily/{day}/video/{result['credits']}",
+    }
 
 
 @app.get("/api/daily/{day}/video/{filename}")
@@ -220,7 +255,9 @@ def daily_video_file(day: str, filename: str):
     if not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="File video tidak ditemukan")
     media_type = "video/mp4" if filename.endswith(".mp4") else "text/plain"
-    return FileResponse(path, media_type=media_type, filename=filename if not filename.endswith(".mp4") else None)
+    return FileResponse(
+        path, media_type=media_type, filename=filename if not filename.endswith(".mp4") else None
+    )
 
 
 @app.get("/api/daily/{day}/videos")
@@ -236,42 +273,63 @@ def daily_videos(day: str):
     return {"day": day, "videos": items}
 
 
+class ChatMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class ChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    message: str = Field(min_length=1, max_length=4000)
+    history: list[ChatMessage] = Field(default_factory=list, max_length=12)
+
+    @field_validator("message")
+    @classmethod
+    def nonempty_message(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError("message must not be blank")
+        return value
+
+
 @app.post("/api/chat")
-async def chat(request: Request):
+async def chat(body: ChatRequest):
     if not ADACODE_KEY:
-        return JSONResponse({"error": "adaCODE key belum di-set"}, status_code=500)
-    body = await request.json()
-    user_msg = (body.get("message") or "").strip()
-    history = body.get("history", [])
-    if not user_msg:
-        return JSONResponse({"error": "pesan kosong"}, status_code=400)
+        return JSONResponse({"error": "adaCODE key belum di-set"}, status_code=503)
 
     ctx = _build_context()
     messages = [{"role": "system", "content": SYSTEM + ctx}]
-    for m in history[-12:]:
-        if m.get("role") in ("user", "assistant"):
-            messages.append({"role": m["role"], "content": m["content"]})
-    messages.append({"role": "user", "content": user_msg})
+    messages.extend(message.model_dump() for message in body.history)
+    messages.append({"role": "user", "content": body.message})
 
     try:
         async with httpx.AsyncClient(timeout=60) as client:
             r = await client.post(
                 ADACODE_BASE,
-                headers={"Authorization": f"Bearer {ADACODE_KEY}",
-                         "Content-Type": "application/json"},
-                json={"model": ADACODE_MODEL, "messages": messages,
-                      "max_tokens": 800, "temperature": 0.7},
+                headers={
+                    "Authorization": f"Bearer {ADACODE_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": ADACODE_MODEL,
+                    "messages": messages,
+                    "max_tokens": 800,
+                    "temperature": 0.7,
+                },
             )
             r.raise_for_status()
             data = r.json()
             return {"reply": data["choices"][0]["message"]["content"]}
-    except Exception as e:
-        return JSONResponse({"error": f"gagal call adaCODE: {e}"}, status_code=502)
+    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
+        return JSONResponse(
+            {"error": "Model provider could not complete the request"}, status_code=502
+        )
 
 
 @app.get("/health")
 def health():
-    return {"ok": True, "data_dir": DATA_DIR, "has_key": bool(ADACODE_KEY)}
+    return {"ok": True}
 
 
 def _load_all_topics():
@@ -279,19 +337,20 @@ def _load_all_topics():
     files = sorted(glob.glob(os.path.join(DATA_DIR, "topics", "topics_*.json")))
     out = []
     for f in files:
-        try:
-            d = json.load(open(f))
-        except Exception:
+        d = _load_json(f)
+        if not isinstance(d, dict):
             continue
         date = d.get("date") or os.path.basename(f).replace("topics_", "").replace(".json", "")
         topics = d.get("topics", [])
         if not topics:
             continue
-        out.append({
-            "date": date,
-            "scanned": d.get("total_tweets_scanned"),
-            "topics": topics,
-        })
+        out.append(
+            {
+                "date": date,
+                "scanned": d.get("total_tweets_scanned"),
+                "topics": topics,
+            }
+        )
     out.sort(key=lambda x: x["date"])
     return out
 
@@ -300,12 +359,16 @@ def _load_all_topics():
 def status_page(request: Request, day: str = None):
     dates = _daily_dates()
     selected = day if day in dates else (dates[0] if dates else _today_prefix())
-    return TEMPLATES.TemplateResponse(request=request, name="status.html", context={
-        "request": request,
-        "dates": dates,
-        "selected_day": selected,
-        "status": build_status(DATA_DIR, selected),
-    })
+    return TEMPLATES.TemplateResponse(
+        request=request,
+        name="status.html",
+        context={
+            "request": request,
+            "dates": dates,
+            "selected_day": selected,
+            "status": build_status(DATA_DIR, selected),
+        },
+    )
 
 
 @app.get("/api/status")
@@ -324,14 +387,19 @@ def topics_timeline(request: Request):
         for t in d["topics"]:
             seen[t.get("topic", "")] = seen.get(t.get("topic", ""), 0) + t.get("count", 0)
     top_topics = sorted(seen.items(), key=lambda x: -x[1])[:12]
-    return TEMPLATES.TemplateResponse(request=request, name="topics_timeline.html", context={
-        "request": request,
-        "days": days,
-        "top_topics": top_topics,
-        "total_days": len(days),
-    })
+    return TEMPLATES.TemplateResponse(
+        request=request,
+        name="topics_timeline.html",
+        context={
+            "request": request,
+            "days": days,
+            "top_topics": top_topics,
+            "total_days": len(days),
+        },
+    )
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    uvicorn.run(app, host="127.0.0.1", port=8000)

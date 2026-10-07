@@ -5,7 +5,9 @@ description: 'Maintain the Techbro pipeline on VPS: cron job, data file layout, 
 
 # Techbro Pipeline
 
-Techbro pipeline running on VPS `/home/isra/techbro/techbro-pipeline`.
+Techbro pipeline implementation is in `src/techbro_pipeline/`; install with
+`uv sync --locked`. Paths are configured using `DATA_DIR`, `DATASET_DIR`, and
+`CREDS_FILE`. See `README.md` for the verified setup and commands.
 
 Lima tahap, dipanggil berurutan oleh `pipeline_daily.sh`:
 scan → sources → topic_tracker → build_threads_draft → build_dataset.
@@ -37,16 +39,18 @@ Ranking pakai `editorial_score()`: `count * 2` + bobot keyword (`agent` +6,
 ## Cron
 
 ```bash
-0 8 * * * cd /home/isra/techbro/techbro-pipeline && ./pipeline_daily.sh >> data/pipeline.log 2>&1
+0 9 * * * cd /path/to/techbro-pipeline && ./pipeline_daily.sh
 ```
 
-Pipeline nulis `crontab -l` ke `data/crontab.txt` tiap selesai run.
+The runner writes `DATA_DIR/pipeline.log` itself and prevents overlapping runs.
+It does not snapshot the host's crontab. Without a supplied snapshot, scheduling
+details are unknown to the web process.
 
 ## Web
 
 ```bash
-cd /home/isra/techbro/techbro-pipeline
-docker compose up -d --build digest
+cd /path/to/techbro-pipeline
+docker compose up -d --no-deps --build digest
 ```
 
 Route: `/` arsip harian · `/status` health check · `/topics-timeline` tren topik
@@ -61,4 +65,6 @@ Badge: OK / perlu perhatian / dilewati / gagal. Jalur JSON di `/api/status`.
 - Filter content by topic (AI/coding/startup/engineering), NOT by `is_techbro_id` flag
 - Chat AI (adaCODE) TIDAK ada di template `/`; hanya endpoint `/api/chat` terpisah
 - `data/pipeline.log` append-only — parser cuma baca 512KB terakhir
-- Rebuild web selalu pakai `docker compose up -d --build digest` (volume cuma mount `./data`, kode ada di image)
+- Rebuild only `digest` with `--no-deps`; keep any existing reverse proxy running.
+  Compose mounts data and dataset; templates and application code are packaged in
+  the image. The default bind address is localhost and video rendering is opt-in.

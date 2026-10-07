@@ -1,31 +1,27 @@
 services:
-  traefik:
-    image: traefik:v3.3
-    container_name: traefik
-    command:
-      - "--configFile=/etc/traefik/traefik.yml"
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./traefik.yml:/etc/traefik/traefik.yml:ro
-      - ./dynamic.yml:/etc/traefik/dynamic.yml:ro
-      - ./certs:/letsencrypt
-    restart: unless-stopped
-
   digest:
-    build: ./web
+    build:
+      context: .
+      dockerfile: web/Dockerfile
     container_name: digest-web
     environment:
-      - DATA_DIR=/data
-      - ADACODE_API_KEY=${ADACODE_API_KEY}
-      - ADACODE_MODEL=${ADACODE_MODEL:-adacode-2.0}
-      - ENABLE_VIDEO_RENDER=true
-      - PEXELS_API_KEY=${PEXELS_API_KEY:-}
+      DATA_DIR: /data
+      DATASET_DIR: /dataset
+      ADACODE_API_KEY: ${ADACODE_API_KEY:-}
+      ADACODE_MODEL: ${ADACODE_MODEL:-adacode-2.0}
+      ENABLE_VIDEO_RENDER: ${ENABLE_VIDEO_RENDER:-false}
+      TTS_BACKEND: local
+      PEXELS_API_KEY: ${PEXELS_API_KEY:-}
     volumes:
       - ./data:/data
+      - ./dataset:/dataset:ro
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${TECHBRO_PORT:-8000}:8000"
     restart: unless-stopped
-    depends_on:
-      - traefik
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    cpus: 1.0

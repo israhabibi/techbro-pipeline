@@ -7,13 +7,13 @@ Wants=network-online.target
 Type=simple
 User=techbro-web
 Group=techbro-data
-WorkingDirectory=/opt/techbro-pipeline/web/app
+WorkingDirectory=/opt/techbro-pipeline
 EnvironmentFile=-/etc/techbro/techbro.env
 Environment=DATA_DIR=/opt/techbro-pipeline/data
-Environment=TEMPLATE_DIR=/opt/techbro-pipeline/web/app/templates
+Environment=DATASET_DIR=/opt/techbro-pipeline/dataset
 Environment=ADACODE_MODEL=adacode-2.0
 Environment=ENABLE_VIDEO_RENDER=true
-ExecStart=/opt/techbro-pipeline/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1 --limit-concurrency 24 --timeout-keep-alive 5
+ExecStart=/opt/techbro-pipeline/.venv/bin/uvicorn techbro_pipeline.web.main:app --host 127.0.0.1 --port 8000 --workers 1 --limit-concurrency 24 --timeout-keep-alive 5
 Restart=on-failure
 RestartSec=3
 MemoryHigh=260M

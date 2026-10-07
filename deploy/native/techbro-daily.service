@@ -10,6 +10,7 @@ Group=techbro-data
 WorkingDirectory=/opt/techbro-pipeline
 EnvironmentFile=/etc/techbro/techbro.env
 Environment=DATA_DIR=/opt/techbro-pipeline/data
+Environment=DATASET_DIR=/opt/techbro-pipeline/dataset
 ExecStart=/bin/bash /opt/techbro-pipeline/deploy/native/run-daily.sh
 MemoryHigh=350M
 MemoryMax=480M

@@ -5,7 +5,9 @@ Reads the cron log plus the artifacts each stage is expected to write, so a
 missing or skipped stage shows up on the web instead of only in a log file the
 user has to open by hand.
 """
+
 import glob
+import json
 import os
 import re
 
@@ -13,6 +15,7 @@ OK, WARN, FAIL, SKIP, PENDING = "ok", "warn", "fail", "skip", "pending"
 
 STEP_RE = re.compile(r"^=== \[(\d)/(\d)\]\s+(.+?)\s+===\s*$")
 DONE_RE = re.compile(r"^=== DONE (.+?) ===\s*$")
+RUN_RE = re.compile(r"^=== RUN (\d{8}) ===\s*$", re.MULTILINE)
 LOG_MAX_BYTES = 512 * 1024
 
 # (label, artifact template relative to DATA_DIR) — None means "no artifact to check".
@@ -52,18 +55,23 @@ def _last_run(log_text):
     if not log_text:
         return None
     lines = log_text.splitlines()
-    starts = [i for i, line in enumerate(lines)
-              if (match := STEP_RE.match(line)) and match.group(1) == "1"]
+    starts = [
+        i
+        for i, line in enumerate(lines)
+        if (match := STEP_RE.match(line)) and match.group(1) == "1"
+    ]
     if not starts:
         return None
-    return lines[starts[-1]:]
+    return lines[starts[-1] :]
 
 
 def _classify(step_lines, finished):
     if any("[skip]" in line or "SKIP" in line for line in step_lines):
         return SKIP
-    if any("[warn]" in line or "[error]" in line or "Traceback" in line
-           or "Error" in line for line in step_lines):
+    if any(
+        "[warn]" in line or "[error]" in line or "Traceback" in line or "Error" in line
+        for line in step_lines
+    ):
         return WARN
     if not finished:
         return PENDING
@@ -82,13 +90,26 @@ def _artifact(data_dir, template, day):
     if not template:
         return None
     if template == "@dataset":
-        return {"ok": os.path.isfile(os.path.join(os.path.dirname(data_dir),
-                                                   "dataset", "techbro_tweets.csv")),
-                "detail": "dataset/techbro_tweets.csv"}
+        dataset_dir = os.environ.get(
+            "DATASET_DIR", os.path.join(os.path.dirname(data_dir), "dataset")
+        )
+        return {
+            "ok": os.path.isfile(os.path.join(dataset_dir, "techbro_tweets.csv")),
+            "detail": "dataset/techbro_tweets.csv",
+        }
     path = os.path.join(data_dir, template.format(day=day))
-    return {"ok": os.path.isfile(path),
-            "detail": os.path.relpath(path, data_dir),
-            "bytes": os.path.getsize(path) if os.path.isfile(path) else 0}
+    valid = False
+    if os.path.isfile(path):
+        try:
+            with open(path, encoding="utf-8") as handle:
+                valid = isinstance(json.load(handle), dict)
+        except (OSError, ValueError):
+            pass
+    return {
+        "ok": valid,
+        "detail": os.path.relpath(path, data_dir),
+        "bytes": os.path.getsize(path) if os.path.isfile(path) else 0,
+    }
 
 
 def _parse_steps(run_lines):
@@ -97,12 +118,14 @@ def _parse_steps(run_lines):
     for line in run_lines:
         match = STEP_RE.match(line)
         if match:
-            parsed.append({
-                "index": int(match.group(1)),
-                "total": int(match.group(2)),
-                "label": match.group(3),
-                "lines": [],
-            })
+            parsed.append(
+                {
+                    "index": int(match.group(1)),
+                    "total": int(match.group(2)),
+                    "label": match.group(3),
+                    "lines": [],
+                }
+            )
             continue
         if DONE_RE.match(line):
             if parsed:
@@ -124,8 +147,7 @@ def _read_crontab(data_dir):
         return None
     try:
         with open(path, encoding="utf-8") as fh:
-            return [line.strip() for line in fh
-                    if line.strip() and not line.startswith("#")]
+            return [line.strip() for line in fh if line.strip() and not line.startswith("#")]
     except OSError:
         return None
 
@@ -144,12 +166,14 @@ def _external_cron(crontab_lines):
         if PIPELINE_MARKER in command:
             continue
         target = command.split()[0] if command.split() else command
-        entries.append({
-            "label": target.rsplit("/", 1)[-1] or target,
-            "state": OK,
-            "note": f"{schedule} · {command}",
-            "artifact": None,
-        })
+        entries.append(
+            {
+                "label": target.rsplit("/", 1)[-1] or target,
+                "state": OK,
+                "note": f"{schedule} · {command}",
+                "artifact": None,
+            }
+        )
     return entries
 
 
@@ -158,23 +182,38 @@ def build_status(data_dir, day):
     log_text = _read_log(data_dir)
     run_lines = _last_run(log_text)
     parsed = _parse_steps(run_lines) if run_lines else []
-    done_line = next((line for line in reversed(run_lines or [])
-                      if DONE_RE.match(line)), None)
+    done_line = next((line for line in reversed(run_lines or []) if DONE_RE.match(line)), None)
     finished = done_line is not None
+    failed = any(line.startswith("=== FAILED ") for line in run_lines or [])
+    run_dates = RUN_RE.findall(log_text or "")
+    run_date_matches = not run_dates or run_dates[-1] == day
 
     stages = []
     for position, (label, artifact) in enumerate(STAGES):
         record = parsed[position] if position < len(parsed) else None
-        state = _classify(record["lines"], finished) if record else (
-            WARN if run_lines else PENDING)
-        stages.append({
-            "index": position + 1,
-            "label": label,
-            "state": state,
-            "detail": _tail(record["lines"]) if record else [],
-            "artifact": _artifact(data_dir, artifact, day),
-            "in_log": record is not None,
-        })
+        stage_finished = finished or position < len(parsed) - 1
+        state = (
+            _classify(record["lines"], stage_finished)
+            if record
+            else (FAIL if finished else PENDING)
+        )
+        artifact = _artifact(data_dir, artifact, day)
+        if record and failed and position == len(parsed) - 1:
+            state = FAIL
+        elif state == OK and artifact and not artifact["ok"]:
+            state = FAIL
+        if not run_date_matches:
+            state = WARN
+        stages.append(
+            {
+                "index": position + 1,
+                "label": label,
+                "state": state,
+                "detail": _tail(record["lines"]) if record else [],
+                "artifact": artifact,
+                "in_log": record is not None,
+            }
+        )
 
     crontab = _read_crontab(data_dir)
     externals = _external_cron(crontab)
@@ -186,6 +225,8 @@ def build_status(data_dir, day):
         overall = FAIL
     elif WARN in states or SKIP in states:
         overall = WARN
+    elif PENDING in states or not finished:
+        overall = PENDING
     else:
         overall = OK
 

@@ -1,5 +1,0 @@
-topic,tweet_count,summary,handles,days
-Claude SSH Access Concern,2,"Beberapa developer techbro menyadari bahwa AI assistant seperti Claude bisa 'membaca' atau membantu mengakses SSH, menimbulkan pertanyaan soal keamanan dan privasi kunci SSH. Sudut pandang yang muncul campur aduk: ada yang menganggap ini convenience ('untung ada abang Claude'), tapi juga ada yang透着kekhawatiran implisit soal eksposur credential.",@lynxluna @YehezGun,2026-10-06
-Graphics API Nostalgia,2,"Diskusi teknis tentang perbandingan API grafik lama (DX9-11, OpenGL) versus pendekatan modern stateless, dengan sentuhan humor dan nostalgia. @lynxluna bertanya apakah lawan bicaranya suka API stateful.",@lynxluna,2026-10-06
-Python AI SDK Best Practices,1,kdnuggets membagikan artikel tentang cara membangun library AI Python yang robust dan separation of concern dalam AI SDK.,@kdnuggets,2026-10-06
-Coding Slop Culture,1,Satu tweet curhat soal 'slopping'—istilah slang untuk coding terburu-buru demi deliver cepat—yang akhirnya bikin code nya malah nggak penting.,@onehappyfellow,2026-10-06

@@ -1,0 +1,17 @@
+.git
+.venv
+**/__pycache__
+**/*.pyc
+.env
+.env.*
+*creds*.json
+data
+dataset
+certs
+letsencrypt
+dist
+.pytest_cache
+.ruff_cache
+reports
+videos
+*.mp4

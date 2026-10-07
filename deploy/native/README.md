@@ -1,87 +1,52 @@
-# Native VPS deployment (1 vCPU / 1 GB RAM)
+# Native Linux deployment
 
-This runs the web app and daily pipeline directly on the host: one Uvicorn
-worker, systemd, JSON files, and Caddy for HTTPS + password protection. No
-Docker daemon, database, or 9router is needed for this app.
+Prerequisites: Git, Python 3.11+, uv, FFmpeg, eSpeak NG, DejaVu fonts, systemd, and
+one existing authenticated HTTPS reverse proxy (or Caddy).
 
-## Install on a fresh Ubuntu VPS
-
-1. Install Python 3.11+, `python3-venv`, `ffmpeg`, `espeak-ng`, `fonts-dejavu-core`, and Caddy. Create a `techbro-data`
-   group, a `techbro` system user for the scanner, and a separate `techbro-web`
-   system user for the read-only web app. Place this repository at
-   `/opt/techbro-pipeline`, owned by root and readable/traversable by
-   `techbro-data`. Make `data/` and `dataset/` owned by `techbro:techbro-data`
-   and group-writable (directories mode `2770`). The web service is sandboxed
-   read-only except for `/data/videos`, where it stores generated output. It
-   cannot read the scanner's X credentials.
-   Create `/opt/techbro-pipeline/data/videos` as
-   `techbro-web:techbro-data`, mode `2770`, before starting the web service.
-2. As root, create the venv and install the web dependencies:
-
-   ```sh
-   cd /opt/techbro-pipeline
-   python3 -m venv .venv
-   .venv/bin/pip install -r web/requirements.txt
-   ```
-
-3. Create `/etc/techbro/techbro.env` (root-owned, mode `600`) with:
+1. Create a `techbro-data` group and separate `techbro` and `techbro-web` system
+   accounts in that group. Clone the repository at `/opt/techbro-pipeline` and
+   install as an administrator with
+   `uv sync --locked --no-dev --no-editable --python /usr/bin/python3 --no-managed-python`.
+   Use the system interpreter so service accounts do not depend on an
+   administrator's private Python cache beneath a home directory.
+2. Create `data/` and `dataset/` owned by `techbro:techbro-data`, directories mode
+   `2770`. Create `data/videos/` owned by `techbro-web:techbro-data`, mode `2770`.
+   Ensure the installed package and interpreter are readable by both accounts.
+3. Create `/etc/techbro` as `root:techbro`, mode `750`. Put credentials at
+   `/etc/techbro/creds.json`, owned by `techbro`, mode `600`. Create the protected
+   environment file `/etc/techbro/techbro.env`, owned by root, mode `600`:
 
    ```ini
-   ADACODE_API_KEY=your-key
    CREDS_FILE=/etc/techbro/creds.json
    SCAN_PAGES=3
-   # Optional; if omitted, generated scenes use local motion cards.
-   PEXELS_API_KEY=your-pexels-api-key
+   ADACODE_API_KEY=replace-with-key
+   ADACODE_MODEL=adacode-2.0
+   ENABLE_SUPPLEMENTAL_RSS=1
+   TTS_BACKEND=local
    ```
 
-   Put the X credentials JSON at `/etc/techbro/creds.json`, owned by `techbro`
-   and mode `600` so the scanner can read it. Make `/etc/techbro` traversable by
-   that service account (for example, `root:techbro` mode `750`). Do not commit
-   either file. systemd passes these values only
-   to both processes, but the web account cannot read the X credentials file.
+   Add `PEXELS_API_KEY` only if external video clips are wanted. The web account
+   cannot read the scanner's credential file. Environment variables are passed
+   by systemd; `.env` is not required for these services.
+4. Install the three `techbro-*.service`/`.timer` files in `/etc/systemd/system/`.
+   Run `systemd-analyze verify` on them, then `systemctl daemon-reload`.
+5. Configure your single ingress. `Caddyfile.example` uses HTTPS and basic auth;
+   replace its domain and password-hash placeholder and run `caddy validate`.
+   Keep an existing reverse proxy if one already occupies ports 80/443.
+6. Enable/start `techbro-web.service` and `techbro-daily.timer`. Check
+   `http://127.0.0.1:8000/health`, journal logs, and the timer schedule. External
+   requests without credentials should receive `401`.
+7. Run `systemctl start techbro-daily.service` for a live pipeline check. It scans
+   once, uses the installed interpreter for all stages, stops on failure, and
+   logs to `data/pipeline.log`. It runs at 09:00 Asia/Jakarta.
 
-4. Install `techbro-web.service`, `techbro-daily.service`, and
-   `techbro-daily.timer` into `/etc/systemd/system/`. Copy
-   `Caddyfile.example` to `/etc/caddy/Caddyfile`, replace the password hash
-   placeholder with the output of `caddy hash-password`, then validate Caddy's
-   config before starting it. The basic-auth gate is intentional: the archive
-   is derived from a personal X timeline.
-5. Enable `techbro-web.service` and `techbro-daily.timer`, then enable/reload
-   Caddy. Verify with `systemctl status`, `journalctl -u techbro-web`, and
-   `curl -I https://airflow.my.id/daily` (expect `401` without credentials).
-6. Run the first scan manually with `systemctl start techbro-daily.service`.
-   Check its logs before relying on the timer.
+The web service binds to loopback and is read-only except for video output.
+Its supplied service configuration enables local video rendering. Use one worker
+so the process lock serializes renders. Keep swap on a small VPS, back up runtime
+artifacts separately, and deploy tested revisions rather than modifying files
+inside the installed package.
 
-The daily job runs at 09:00 Asia/Jakarta and scans first, then generates topics,
-Threads drafts, and CSV data. The UI binds only to loopback; Caddy is the sole
-public entry point. Back up `/opt/techbro-pipeline/data` and keep secrets out of
-the repository. On a 1 GB host, leave swap enabled as an OOM safety net.
-
-Video rendering is on-demand so it cannot compete with the daily scan: export
-the plan or use **Generate video otomatis** in the UI. The button creates an
-Indonesian voice-over locally with eSpeak NG, uses Pexels clips if an API key is
-configured (otherwise it creates motion cards), burns subtitles, and returns
-an MP4 plus subtitle/credit sidecars. TTS voice is intentionally local; eSpeak
-is compact but noticeably synthetic. The Pexels API key is optional; its API
-requires authorization and attribution links/photographer credit, which the UI
-and generated credits file provide. Review the selected clip and final video
-before publishing.
-
-For the separate manual-asset workflow, export a plan, create the voice track
-with another TTS tool, download reviewed clips as `scene-01.mp4`, `scene-02.mp4`,
-etc., then run:
-
-```sh
-python3 render_video.py --plan video-plan-YYYYMMDD.json \
-  --assets-dir ./video-assets --audio ./narration.mp3 \
-  --output ./techbro-YYYYMMDD.mp4
-```
-
-The renderer refuses unreviewed or unattributed assets, outputs a vertical
-1080×1920 H.264/AAC MP4 with estimated-timing subtitles, and writes a credits
-sidecar. Subtitle timing is approximate, so review and adjust it in an editor.
-
-If this hostname already uses a reverse proxy on ports 80/443 (for example,
-the existing Traefik instance), do not start Caddy alongside it. Keep one
-ingress only and configure that existing proxy to send traffic to
-`127.0.0.1:8000` with equivalent basic authentication.
+The optional manual renderer is `uv run --locked techbro render --help`. It
+requires reviewed local clips, a JSON video plan, and a narration file. It writes
+MP4, subtitle, and credit sidecars. Review narration, footage rights, and subtitle
+alignment before publishing.

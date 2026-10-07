@@ -1,0 +1,7 @@
+{
+  "bearer": "REPLACE_WITH_X_BEARER_TOKEN",
+  "auth_token": "REPLACE_WITH_X_SESSION_COOKIE",
+  "ct0": "REPLACE_WITH_X_CSRF_COOKIE",
+  "twid": "REPLACE_WITH_X_USER_ID_COOKIE",
+  "kdt": ""
+}
