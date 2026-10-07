@@ -66,7 +66,7 @@ def main():
                         with urllib.request.urlopen(base + "/health", timeout=2) as response:
                             assert json.load(response) == {"ok": True}
                         break
-                    except (urllib.error.URLError, TimeoutError):
+                    except OSError:
                         if server.poll() is not None or time.monotonic() >= deadline:
                             log.flush()
                             log.seek(0)

@@ -5,7 +5,7 @@ and offline runtime checks from live account-dependent integrations.
 
 ## Pre-deployment results
 
-- 69 Python tests passed on Python 3.11 and 3.14.
+- 70 Python tests pass; Python 3.11 and 3.14 are verified.
 - 10 Node tests passed; Ruff, ESLint, and formatting checks passed.
 - Python runtime dependency audit and npm dependency audit reported no known
   vulnerabilities at the time of verification.
@@ -21,6 +21,17 @@ and offline runtime checks from live account-dependent integrations.
   authorized deployment target is the existing local Docker dashboard.
 
 ## Repeatable checks
+
+The local `digest-web` container was replaced successfully after a separate
+container passed HTTP checks without credentials. Existing data/dataset mounts
+were preserved, the dashboard now binds to localhost, and the existing shared
+Traefik container was left running. `/health`, `/daily`, `/status`,
+`/topics-timeline`, and `/api/status` returned successful responses after deployment.
+
+The first independent remote checkout at `7a4885e` passed clean installation,
+all quality checks, audits, and HTTP startup. A transient Docker startup
+connection reset prompted a verifier retry fix and an additional regression
+test before the final post-deployment pull and verification.
 
 ```sh
 uv sync --locked
