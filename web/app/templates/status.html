@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Status Pipeline · Techbro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Source+Serif+4:opsz,wght@8..60,600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f7f4ed;
+    --ink:#1a1a1a;
+    --muted:#6b6b66;
+    --red:#c0211f;
+    --redsoft:#f3e2e0;
+    --line:#d8d2c4;
+    --blue:#1a4d8f;
+    --green:#1f6b3a;
+    --greensoft:#e3ede4;
+    --yellow:#b8860b;
+    --yellowsoft:#f6efd9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+       font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.55;font-size:15px}
+  h1,h2,h3,.serif{font-family:"Playfair Display","Source Serif 4",Georgia,serif}
+  header{border-bottom:3px double var(--ink);padding:14px 20px 10px;text-align:center;background:var(--paper)}
+  header .mast{font-family:"Playfair Display",Georgia,serif;font-weight:900;font-size:30px;letter-spacing:-.5px;margin:0;line-height:1}
+  header .mast .amp{color:var(--red);font-style:italic}
+  header .sub{font-size:11px;text-transform:uppercase;letter-spacing:3px;color:var(--muted);margin-top:4px}
+  header .date{border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-top:8px;padding:3px 0;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+  main{max-width:980px;margin:0 auto;padding:22px 16px 70px}
+
+  .lede{font-family:"Playfair Display",Georgia,serif;font-weight:700;font-size:20px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:14px}
+  .lede .kicker{display:block;font-family:-apple-system,sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin-bottom:6px}
+
+  .dayselect{font-size:12px;margin:0 0 18px}
+  .dayselect a{display:inline-block;border:1px solid var(--line);border-radius:3px;padding:2px 8px;margin:2px 4px 2px 0;text-decoration:none;color:var(--blue);background:#fbf9f3;font-weight:600}
+  .dayselect a.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+  /* summary strip */
+  .summary{display:flex;flex-wrap:wrap;gap:10px;align-items:center;border:1px solid var(--line);border-radius:4px;padding:12px 14px;margin-bottom:22px;background:#fbf9f3}
+  .verdict{font-family:"Playfair Display",Georgia,serif;font-weight:900;font-size:22px;letter-spacing:-.3px}
+  .verdict.ok{color:var(--green)} .verdict.warn{color:var(--yellow)}
+  .verdict.fail{color:var(--red)} .verdict.pending{color:var(--muted)}
+  .summary .when{font-size:12px;color:var(--muted);margin-left:auto;text-align:right}
+  .tally{display:flex;gap:8px;flex-wrap:wrap;font-size:12px;font-weight:700}
+  .tally span{border-radius:3px;padding:2px 8px}
+  .tally .ok{background:var(--greensoft);color:var(--green)}
+  .tally .warn{background:var(--yellowsoft);color:var(--yellow)}
+  .tally .fail{background:var(--redsoft);color:var(--red)}
+  .tally .skip{background:#ece8dd;color:var(--muted)}
+  .tally .pending{background:#ece8dd;color:var(--muted)}
+
+  /* stage table */
+  table.stages{width:100%;border-collapse:collapse;margin-bottom:26px}
+  table.stages th{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);
+                   text-align:left;border-bottom:2px solid var(--ink);padding:0 8px 5px}
+  table.stages td{border-bottom:1px solid var(--line);padding:10px 8px;vertical-align:top}
+  table.stages td.n{width:34px;font-family:"Playfair Display",Georgia,serif;font-weight:900;font-size:17px;color:var(--muted)}
+  table.stages td.st{width:88px}
+
+  .badge{display:inline-block;border-radius:3px;padding:2px 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px}
+  .badge.ok{background:var(--greensoft);color:var(--green)}
+  .badge.warn{background:var(--yellowsoft);color:var(--yellow)}
+  .badge.fail{background:var(--redsoft);color:var(--red)}
+  .badge.skip{background:#ece8dd;color:var(--muted)}
+  .badge.pending{background:#ece8dd;color:var(--muted)}
+
+  .stage .name{font-weight:700;font-size:15px}
+  .stage pre{margin:5px 0 0;padding:6px 8px;background:#efece3;border-radius:3px;
+             font-size:11.5px;line-height:1.4;white-space:pre-wrap;word-break:break-word;color:#33332e}
+  .art{margin-top:4px;font-size:11.5px;color:var(--muted)}
+  .art .hit{color:var(--green);font-weight:700}
+  .art .miss{color:var(--red);font-weight:700}
+
+  h2.sec{font-size:15px;text-transform:uppercase;letter-spacing:2px;border-bottom:2px solid var(--ink);
+         padding-bottom:5px;margin:0 0 12px}
+  .ext{border-bottom:1px solid var(--line);padding:9px 0;display:flex;gap:12px;align-items:flex-start}
+  .ext .nm{flex:1;font-weight:700;font-size:14px}
+  .ext .nt{font-size:12px;color:var(--muted)}
+
+  .cronbox{border:1px solid var(--line);border-radius:4px;background:#fbf9f3;padding:10px 12px;margin-bottom:26px}
+  .cronbox .lh{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);margin-bottom:8px}
+  .cronbox pre{margin:0;font-size:11.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all}
+
+  .empty{color:var(--muted);font-style:italic;font-size:14px;border:1px dashed var(--line);padding:10px;border-radius:4px;margin-bottom:26px}
+  .backlink{display:inline-block;margin-bottom:14px;font-size:12px;color:var(--blue);text-decoration:none;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+  .backlink:hover{color:var(--red)}
+  footer{max-width:980px;margin:40px auto 0;padding:14px 16px;border-top:3px double var(--ink);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="mast">Status <span class="amp">Pipeline</span></h1>
+  <div class="sub">Health Check Harian</div>
+  <div class="date">Tanggal {{ selected_day }}</div>
+</header>
+
+<main>
+  <a class="backlink" href="/">← Kembali ke Digest</a>
+
+  <div class="lede"><span class="kicker">Ringkasan Run</span>
+    Lima tahap pipeline harian plus cron eksternal. Tahap yang dilewati karena dependensi hilang akan ditandai di sini, bukan tenggelam di log.
+  </div>
+
+  <div class="dayselect">
+    {% for d in dates %}
+      <a href="/status?day={{ d }}" class="{{ 'on' if d == selected_day else '' }}">{{ d }}</a>
+    {% endfor %}
+  </div>
+
+  {% if not status.has_log %}
+    <div class="empty">data/pipeline.log belum ada. Jalankan ./pipeline_daily.sh sekali supaya ada log yang bisa diparse.</div>
+  {% else %}
+
+  {% set ns = namespace(ok=0, warn=0, fail=0, skip=0, pending=0) %}
+  {% for s in status.stages %}
+    {% if s.state == 'ok' %}{% set ns.ok = ns.ok + 1 %}
+    {% elif s.state == 'warn' %}{% set ns.warn = ns.warn + 1 %}
+    {% elif s.state == 'fail' %}{% set ns.fail = ns.fail + 1 %}
+    {% elif s.state == 'skip' %}{% set ns.skip = ns.skip + 1 %}
+    {% else %}{% set ns.pending = ns.pending + 1 %}{% endif %}
+  {% endfor %}
+
+  <div class="summary">
+    <div class="verdict {{ status.overall }}">
+      {% if status.overall == 'ok' %}Semua Tahap Selesai
+      {% elif status.overall == 'warn' %}Selesai, Ada Catatan
+      {% elif status.overall == 'fail' %}Ada Tahap Gagal
+      {% else %}Belum Ada Run{% endif %}
+    </div>
+    <div class="tally">
+      {% if ns.ok %}<span class="ok">{{ ns.ok }} OK</span>{% endif %}
+      {% if ns.warn %}<span class="warn">{{ ns.warn }} perlu perhatian</span>{% endif %}
+      {% if ns.skip %}<span class="skip">{{ ns.skip }} dilewati</span>{% endif %}
+      {% if ns.fail %}<span class="fail">{{ ns.fail }} gagal</span>{% endif %}
+      {% if ns.pending %}<span class="pending">{{ ns.pending }} belum ada</span>{% endif %}
+    </div>
+    <div class="when">{{ status.done_line or 'Run belum selesai — proses masih jalan atau mati di tengah jalan.' }}</div>
+  </div>
+
+  <table class="stages">
+    <thead><tr><th></th><th>Tahap</th><th>Status</th><th>Keluaran log</th></tr></thead>
+    <tbody>
+      {% for s in status.stages %}
+      <tr>
+        <td class="n">{{ loop.index }}/{{ status.stages|length }}</td>
+        <td>
+          <div class="stage">
+            <div class="name">{{ s.label }}</div>
+            {% if s.artifact %}
+            <div class="art">{% if s.artifact.ok %}<span class="hit">✓ {{ s.artifact.detail }}</span>{% else %}<span class="miss">✗ {{ s.artifact.detail }} belum ada</span>{% endif %}</div>
+            {% endif %}
+          </div>
+        </td>
+        <td class="st"><span class="badge {{ s.state }}">
+          {% if s.state == 'ok' %}OK{% elif s.state == 'warn' %}Perlu attention{% elif s.state == 'fail' %}Gagal{% elif s.state == 'skip' %}Dilewati{% else %}Belum ada{% endif %}
+        </span></td>
+        <td>
+          {% if s.detail %}<pre>{{ s.detail | join('\n') }}</pre>{% else %}<span class="art">—</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2 class="sec">Cron Lain di Host</h2>
+  {% if status.externals %}
+    {% for e in status.externals %}
+    <div class="ext">
+      <div class="nm">{{ e.label }}<div class="nt">{{ e.note }}</div></div>
+      <span class="badge ok">di luar repo</span>
+    </div>
+    {% endfor %}
+  {% else %}
+  <div class="empty">Tidak ada cron lain besides pipeline ini di snapshot crontab.</div>
+  {% endif %}
+
+  <h2 class="sec">Snapshot Crontab</h2>
+  {% if status.crontab %}
+  <div class="cronbox">
+    <div class="lh">Akhir file data/crontab.txt — container tidak bisa membaca crontab host</div>
+    <pre>{{ status.crontab | join('\n') }}</pre>
+  </div>
+  {% else %}
+  <div class="cronbox">
+    <div class="lh">Belum ada snapshot</div>
+    <pre>crontab -l &gt; data/crontab.txt</pre>
+  </div>
+  {% endif %}
+
+  {% endif %}
+</main>
+
+<footer>Status Pipeline · Techbro Daily</footer>
+</body>
+</html>
