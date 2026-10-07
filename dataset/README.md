@@ -4,11 +4,11 @@ Kumpulan tweet dari komunitas "techbro" Indonesia (engineer/developer/founder
 teknologi Tanah Air) yang dikumpulkan harian lewat timeline X (Twitter).
 
 ## Files
-- `techbro_tweets.csv` — 69 tweet techbro (akumulasi semua waktu), 1 baris per tweet, kolom:
+- `techbro_tweets.csv` — 208 tweet techbro (akumulasi semua waktu), 1 baris per tweet, kolom:
   - `tweet_id`, `day`, `user_handle`, `text`, `created_at`, `user_score`, `reasons`
-- `techbro_activity.csv` — 21 baris (1 per hari × user), kolom:
+- `techbro_activity.csv` — 54 baris (1 per hari × user), kolom:
   - `day`, `user_handle`, `tweet_count`, `max_score`, `sample_texts`
-- `techbro_topics.csv` — 6 topik hangat teragregasi (14 hari terakhir), kolom:
+- `techbro_topics.csv` — 4 topik hangat teragregasi (14 hari terakhir), kolom:
   - `topic`, `tweet_count`, `summary`, `handles`, `days`
 
 ## Method
