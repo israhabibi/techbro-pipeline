@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
-"""Techbro & Tempo Digest - web viewer.
-Reads JSON produced by scan.py / tempo.py / digest cron from /data (host mount)."""
+"""Techbro pipeline web viewer.
+
+Reads JSON produced by scan.py / sources.py / topic_tracker.py /
+build_threads_draft.py from /data (host mount).
+"""
 import json, os, glob, datetime, re, threading
 from fastapi import FastAPI, Request, Query, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
@@ -9,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
 import httpx
 from video_generation import VideoGenerationError, render_daily_video
+from pipeline_status import build_status
 
 app = FastAPI()
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
@@ -60,97 +64,65 @@ def _load_json(path):
 
 
 def _build_context():
-    """Gabungkan semua data techbro + tempo dari digest terbaru jadi teks."""
-    d = _latest("digest")
-    if not d or not isinstance(d, dict):
-        print("[CHAT-DEBUG] no digest data found", flush=True)
-        return "(belum ada data digest)"
-    try:
-        # d sudah berupa dict (hasil json.load dari _latest)
-        pass
-    except Exception as e:
-        print(f"[CHAT-DEBUG] error: {e}", flush=True)
-        return "(gagal baca digest)"
+    """Rakit konteks chat langsung dari artefak pipeline.
 
+    Sumber: topics_*.json (brief editorial), feed_*.json (kontributor teratas),
+    sources_*.json (RSS keyword + Tempo). Digest sudah dihapus dari pipeline, jadi
+    tidak ada lagi file yang tidak pernah ditulis.
+    """
     parts = []
-    tb = d.get("techbro", {})
-    parts.append("### TECHBRO / TWITTER")
-    for c in tb.get("contributors", [])[:8]:
-        parts.append(f"- @{c.get('user')}: {c.get('count')} tweet")
-    for t in tb.get("themes", []):
-        body = " ".join(t.get("body", []))
-        parts.append(f"\n**{t.get('title')}**\n{t.get('summary','')}\n{body}")
-
-    tp = d.get("tempo", {})
-    # tempo & politics dihapus — fokus techbro only
-    # topik hangat techbro (tracker)
-    tp = _latest_topics()
-    if tp and tp.get("topics"):
-        parts.append("\n### TOPIK HANGAT TECHBRO (24 jam terakhir)")
-        for t in tp["topics"]:
-            parts.append(f"\n**{t.get('topic')}** ({t.get('count')} tweet): {t.get('summary','')}")
+    topics = _latest_topics()
+    if topics and topics.get("topics"):
+        parts.append("### TOPIK HANGAT TECHBRO (24 jam terakhir)")
+        for t in topics["topics"]:
+            line = f"\n**{t.get('topic')}** ({t.get('count')} tweet): {t.get('summary','')}"
+            if t.get("context"):
+                line += f"\n  Konteks: {t['context']}"
+            if t.get("value_added"):
+                line += f"\n  Analisis: {t['value_added']}"
             if t.get("handles"):
-                parts.append("  handles: " + ", ".join(t["handles"]))
+                line += "\n  handles: " + ", ".join(t["handles"])
+            parts.append(line)
+
+    counts = {}
+    for t in (_latest("feed") or {}).get("tweets", []):
+        if t.get("is_techbro_id") and t.get("user"):
+            counts[t["user"]] = counts.get(t["user"], 0) + 1
+    if counts:
+        parts.append("\n### KONTRIBUTOR TERATAS")
+        parts.extend(f"- @{user}: {n} tweet"
+                     for user, n in sorted(counts.items(), key=lambda kv: -kv[1])[:10])
+
+    sources = _latest("sources")
+    if sources:
+        headlines = []
+        for items in (sources.get("keywords") or {}).values():
+            headlines.extend(i.get("title", "") for i in (items or [])[:2])
+        headlines.extend(a.get("title", "") for a in (sources.get("tempo") or [])[:12])
+        headlines = [h for h in headlines if h][:20]
+        if headlines:
+            parts.append("\n### JUDUL BERITA (keyword monitoring + Tempo)")
+            parts.extend(f"- {h}" for h in headlines)
+
+    if not parts:
+        return "(belum ada data pipeline untuk hari ini)"
     out = "\n".join(parts)
-    print(f"[CHAT-DEBUG] context built, len={len(out)}", flush=True)
+    print(f"[CHAT] context built, len={len(out)}", flush=True)
     return out
 
 
 SYSTEM = (
-    "Kamu asisten yang menjawab berdasarkan data milik Rafa dari Twitter (akun techbro) "
-    "dan koran Tempo. Gunakan KONTEKS di bawah. Jika di luar konteks, jawab wawasan umum "
-    "tapi sebutkan kalau tidak ada di data. Bahasa santai Indo (lo-gue). Jangan buat data "
-    "yang tidak ada.\n\nKONTEKS DATA:\n"
+    "Kamu asisten yang menjawab berdasarkan data pipeline techbro milik Rafa: "
+    "topik hangat dari linimasa X, kontributor teratas, dan judul berita dari "
+    "monitoring keyword + Tempo. Gunakan KONTEKS di bawah. Jika di luar konteks, "
+    "jawab wawasan umum tapi sebutkan kalau tidak ada di data. Bahasa santai Indo "
+    "(lo-gue). Jangan buat data yang tidak ada.\n\nKONTEKS DATA:\n"
 )
 
 
 @app.get("/")
 def home(request: Request, day: str = None):
     return daily_page(request, day)
-
-
-@app.get("/_home_old")
-def home_old(request: Request):
-    import glob
-    all_digests = []
-    for f in sorted(glob.glob(os.path.join(DATA_DIR, "digest", "digest_*.json"))):
-        try:
-            d = json.load(open(f))
-            if d.get("techbro") and d["techbro"].get("themes"):
-                all_digests.append(d)
-        except:
-            pass
-
-    date = _today_prefix()
-    feed = _latest("feed") or {"tweets": [], "techbro_tweets": 0,
-                               "total_tweets": 0, "total_users": 0}
-    tempo = _latest("tempo") or {"articles": [], "count": 0}
-    news = _latest("news_monitor") or None
-
-    by_author = {}
-    for t in feed.get("tweets", []):
-        if not t.get("is_techbro_id"):
-            continue
-        by_author.setdefault(t["user"], []).append(t)
-    authors = []
-    for u, ts in by_author.items():
-        ts.sort(key=lambda x: x.get("created_at") or "", reverse=True)
-        authors.append({"user": u, "tweets": ts[:5], "count": len(ts)})
-    authors.sort(key=lambda a: -a["count"])
-
-    return TEMPLATES.TemplateResponse(request=request, name="index.html", context={
-        "request": request,
-        "date": date,
-        "feed": feed,
-        "tempo": tempo,
-        "all_digests": all_digests,
-        "authors": authors,
-        "tempo_articles": tempo.get("articles", [])[:40],
-        "pantauan": None,
-        "topics": _latest_topics(),
-        "news": news,
-        "has_digest": len(all_digests) > 0,
-    })
 
 
 @app.get("/daily")
@@ -322,6 +294,25 @@ def _load_all_topics():
         })
     out.sort(key=lambda x: x["date"])
     return out
+
+
+@app.get("/status")
+def status_page(request: Request, day: str = None):
+    dates = _daily_dates()
+    selected = day if day in dates else (dates[0] if dates else _today_prefix())
+    return TEMPLATES.TemplateResponse(request=request, name="status.html", context={
+        "request": request,
+        "dates": dates,
+        "selected_day": selected,
+        "status": build_status(DATA_DIR, selected),
+    })
+
+
+@app.get("/api/status")
+def status_api(day: str = None):
+    dates = _daily_dates()
+    selected = day if day in dates else (dates[0] if dates else _today_prefix())
+    return build_status(DATA_DIR, selected)
 
 
 @app.get("/topics-timeline")
