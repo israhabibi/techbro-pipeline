@@ -1,88 +1,64 @@
 ---
 name: techbro-digest-pipeline
-description: 'Maintain the Techbro Twitter digest pipeline on VPS: cron job, digest JSON format (PENDEK 6 poin), web deploy via docker compose. Used when user says "digest kepanjangan", "ubah format web", "buat pendek", "ilangin tempo".'
+description: 'Maintain the Techbro pipeline on VPS: cron job, data file layout, web deploy via docker compose. Used when user says "pipeline jalan", "draft kepanjangan", "ubah format web", "buat pendek", "ilangin tempo", "status pipeline".'
 ---
 
-# Techbro Digest Pipeline
+# Techbro Pipeline
 
-Techbro Twitter digest pipeline running on VPS /home/isra_habibi/techbro.
+Techbro pipeline running on VPS `/home/isra/techbro/techbro-pipeline`.
+
+Lima tahap, dipanggil berurutan oleh `pipeline_daily.sh`:
+scan → sources → topic_tracker → build_threads_draft → build_dataset.
 
 ## Data Files
 
-- `data/feed_YYYYMMDD.json` — raw tweets from Twitter scan
-- `data/digest_YYYYMMDD.json` — structured digest with TL;DR + 6-point themes (PENDEK)
-- `data/topics_*.json` — topic tracker (14-day window)
+Semua di `data/<prefix>/<prefix>_YYYYMMDD.json`:
 
-## Digest JSON Format (PENDEK — 6 poin, bukan naratif)
+- `data/feed/feed_YYYYMMDD.json` — raw tweets from X timeline scan, tiap tweet udah ada flag `is_techbro_id` / `is_tech_tweet` / `user_score`
+- `data/sources/sources_YYYYMMDD.json` — `{keywords: {kw: [item]}, tempo: [item]}`
+- `data/topics/topics_YYYYMMDD.json` — brief editorial 24 jam. Tiap topik: `topic`, `count`, `summary`, `context`, `value_added`, `handles`, `days`
+- `data/threads/threads_draft_YYYYMMDD.json` — draft Threads, `{status, parts: [{number, kind, text}]}`
+- `dataset/*.csv` — Kaggle-ready
 
-```json
-{
-  "date": "20260926",
-  "tldr": "1 baris ringkasan di atas.",
-  "techbro": {
-    "contributors": [{"user": "handle", "count": N}],
-    "themes": [
-      {"title": "Judul poin", "summary": "1 kalimat", "body": ["1-2 kalimat doang"]}
-    ]
-  }
-}
-```
+Tidak ada `digest_*.json` lagi. Step `merge_sources.py` + `build_digest_cron.py`
+sudah dihapus karena keduanya bergantung pada file yang tidak pernah dibuat cron.
 
-CRITICAL: body harus 1-2 kalimat PENDEK, bukan paragraf naratif. Tiap theme = 1 poin thread.
+## Draft Format
 
-## Web Layout (top to bottom)
+`build_threads_draft.py` bangun dari `topics_*.json`:
+1. `opening` — 1 baris konteks
+2. `topic` — 4 topik teratas, tiap part ≤500 char (batas Threads), kalimat tidak
+   pernah dipotong di tengah (`sentences()` pecah di `[.!?]`)
+3. `closing` — pertanyaan penutup
 
-1. TL;DR (1 baris, dari digest.tldr)
-2. Thread Harian Techbro — per theme: title + summary + body (pendek)
-3. Tracker Topik (14 hari)
+Ranking pakai `editorial_score()`: `count * 2` + bobot keyword (`agent` +6,
+`rust`/`observability` +4, `bootcamp`/`cohort` -2, `ekspektasi` -3).
 
-No Tempo, no politics, no Prabowo, no adaCODE/chat AI.
-
-## Cron Job
-
-- `86d0c82fb6f6` — Techbro Daily Digest (X Thread)
-- Schedule: `0 1 * * *` (01:00 UTC / 08:00 WIB)
-- Model: `deepseek-v4-flash-0731:netra` via `custom:ai.sumopod.com`
-- Pinned — won't skip on model change
-- Format: thread-style (3-6 tweets, ~200-240 chars each)
-- Content: ALL tweets in feed, filter by CONTENT not is_techbro_id flag
-- NO politics, NO Tempo, NO general news
-
-## Deploy Web
+## Cron
 
 ```bash
-cd /home/isra_habibi/techbro
+0 8 * * * cd /home/isra/techbro/techbro-pipeline && ./pipeline_daily.sh >> data/pipeline.log 2>&1
+```
+
+Pipeline nulis `crontab -l` ke `data/crontab.txt` tiap selesai run.
+
+## Web
+
+```bash
+cd /home/isra/techbro/techbro-pipeline
 docker compose up -d --build digest
 ```
 
-## To Overwrite digest.json Manually (short format)
+Route: `/` arsip harian · `/status` health check · `/topics-timeline` tren topik
 
-```bash
-cd /home/isra_habibi/techbro && python3 -c "
-import json, collections
-feed = json.load(open('data/feed_YYYYMMDD.json'))
-tb = [t for t in feed['tweets'] if t.get('is_techbro_id')]
-cnt = collections.Counter(t['user'] for t in tb)
-d = {
-  'date': 'YYYYMMDD',
-  'tldr': '1 baris ringkasan',
-  'techbro': {
-    'contributors': [{'user':u,'count':c} for u,c in cnt.most_common(8)],
-    'themes': [
-      {'title':'Poin 1','summary':'1 kalimat','body':['1-2 kalimat']},
-    ]
-  }
-}
-json.dump(d, open('data/digest_YYYYMMDD.json','w'), indent=2)
-"
-docker compose up -d --build digest
-```
+`/status` parse `data/pipeline.log` run terakhir + cek artifact tiap tahap.
+Badge: OK / perlu perhatian / dilewati / gagal. Jalur JSON di `/api/status`.
 
 ## Pitfalls & User Preferences
 
-- User ingin format PENDEK (6 poin, bukan narasi 4-5 paragraf)
-- No Tempo, no politics — techbro only
-- Filter content by topic (AI/coding/startup/engineering), NOT by is_techbro_id flag
-- Akun @BukanYahya tweet tech content but not flagged as techbro_id — solved by konten-based filtering
-- Chat AI (adaCODE) harus dihapus dari template
-- web harus selalu rebuild dengan docker compose up -d --build digest setelah ganti template/data
+- User ingin format PENDEK, bukan narasi 4-5 paragraf
+- No Tempo, no politics di output — techbro only
+- Filter content by topic (AI/coding/startup/engineering), NOT by `is_techbro_id` flag
+- Chat AI (adaCODE) TIDAK ada di template `/`; hanya endpoint `/api/chat` terpisah
+- `data/pipeline.log` append-only — parser cuma baca 512KB terakhir
+- Rebuild web selalu pakai `docker compose up -d --build digest` (volume cuma mount `./data`, kode ada di image)
