@@ -91,7 +91,7 @@ Configuration:
 | `ENABLE_SUPPLEMENTAL_RSS` | Off; set to `1` to fetch news |
 | `ENABLE_VIDEO_RENDER` | Off; set to `true` to enable rendering |
 | `TTS_BACKEND` | `local`; `edge` opts into the online TTS extra |
-| `PEXELS_API_KEY` | Unset; optional external video clips |
+| `PEXELS_API_KEY` | Unset; optional preferred video provider |
 | `VIDEO_ASSETS_DIR` | Unset; optional administrator-selected scene directory |
 | `THREADS_APP_ID` | Unset; Threads app identity for Meta setup; posting uses the user token |
 | `THREADS_ACCESS_TOKEN` | Unset; Threads user access token with publishing permission |
@@ -105,6 +105,13 @@ Configuration:
 
 Pipeline artifacts consistently use the Asia/Jakarta calendar date. The raw
 tweet timestamps remain unchanged; exported tweet dates use that local zone.
+
+The daily video studio can fetch clips from Wikimedia Commons without an API
+key when Pexels is unavailable. It automatically accepts only CC0, public
+domain, or CC BY clips, records creator/source/license details in the credits
+file, and falls back to locally generated motion cards when no compatible clip
+is available. Review the credits and comply with each file's license before
+publishing the rendered video.
 
 ## Deployment
 

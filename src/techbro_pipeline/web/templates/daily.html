@@ -101,7 +101,7 @@
     <div id="generated-video" hidden></div>
     <div id="rendered-videos" style="margin-top:14px"></div>
     <div id="storyboard" class="storyboard"></div>
-    <p class="instructions" style="margin-top:12px"><a href="https://www.pexels.com/" target="_blank" rel="noopener">Pexels</a> · Jika PEXELS_API_KEY dikonfigurasi, video otomatis memakai stock clip dan mencantumkan kreator. Tanpa key, sistem membuat motion-card sendiri. Di paket produksi manual, cek lisensi dan atribusi setiap klip.</p>
+    <p class="instructions" style="margin-top:12px"><a href="https://www.pexels.com/" target="_blank" rel="noopener">Pexels</a> · Jika PEXELS_API_KEY tersedia, klip Pexels diprioritaskan. Tanpa key atau hasil yang cocok, sistem mencari video berlisensi CC0, domain publik, atau CC BY di <a href="https://commons.wikimedia.org/" target="_blank" rel="noopener">Wikimedia Commons</a>, lalu membuat motion-card jika tidak ada klip yang aman. Baca file kredit dan sertakan atribusi lisensi yang diwajibkan sebelum dipost.</p>
   </section>
 
   <section class="panel" id="tiktok-panel">
@@ -232,7 +232,7 @@ if (voiceover && storyboard) {
       const player=document.createElement("video");player.controls=true;player.playsInline=true;player.src=data.video_url;player.className="video-preview";
       const links=document.createElement("p");links.className="scene-links";
       [["Unduh MP4",data.video_url],["Unduh subtitle SRT",data.subtitle_url],["Lihat kredit aset",data.credits_url]].forEach(([label,url])=>{const a=document.createElement("a");a.href=url;a.textContent=label;a.target="_blank";a.rel="noopener";links.appendChild(a);});
-      const note=document.createElement("p");note.className="instructions";note.textContent=`Durasi ${data.duration_seconds} dtk · ${data.local_clips||0} klip lokal · ${data.pexels_used} stock clip Pexels · ${data.motion_cards} motion-card. Suara edge-tts (id-ID); cek timing subtitle sebelum dipost.`;
+      const note=document.createElement("p");note.className="instructions";note.textContent=`Durasi ${data.duration_seconds} dtk · ${data.local_clips||0} klip lokal · ${data.pexels_used} klip Pexels · ${data.commons_used||0} klip Wikimedia Commons · ${data.motion_cards} motion-card. Baca file kredit dan sertakan atribusi lisensi yang diwajibkan sebelum dipost.`;
       result.append(player,links,note);result.hidden=false;status.textContent="Video siap.";loadRendered();
     }catch(error){status.textContent=error.message;}
     finally{button.disabled=false;button.textContent="Generate video otomatis";}

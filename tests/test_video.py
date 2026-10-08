@@ -1,4 +1,7 @@
+import json
 import subprocess
+from io import BytesIO
+from urllib.parse import urlparse
 
 import pytest
 
@@ -29,6 +32,70 @@ def test_missing_video_dependency_is_actionable(tmp_path, monkeypatch):
         video.render_daily_video(tmp_path, "20260101", "Demo.")
 
 
+@pytest.mark.parametrize(
+    "license_name,expected",
+    [("CC BY 4.0", True), ("CC BY-SA 4.0", False), ("CC BY-NC 4.0", False)],
+)
+def test_commons_video_search_checks_license_and_records_attribution(
+    tmp_path, monkeypatch, license_name, expected
+):
+    class Response(BytesIO):
+        headers = {"Content-Length": "4"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            self.close()
+
+    def response(data):
+        return Response(data if isinstance(data, bytes) else json.dumps(data).encode())
+
+    def open_url(request, timeout):
+        url = request.full_url
+        if "generator=search" in url:
+            return response(
+                {
+                    "query": {
+                        "pages": {
+                            "1": {
+                                "title": "File:Demo.webm",
+                                "imageinfo": [
+                                    {
+                                        "url": "https://upload.wikimedia.org/demo.webm",
+                                        "descriptionurl": "https://commons.wikimedia.org/wiki/File:Demo.webm",
+                                        "mime": "video/webm",
+                                        "size": 4,
+                                        "extmetadata": {
+                                            "LicenseShortName": {"value": license_name},
+                                            "LicenseUrl": {
+                                                "value": "https://creativecommons.org/licenses/by/4.0/"
+                                            },
+                                            "Artist": {"value": "<a>Demo creator</a>"},
+                                        },
+                                    }
+                                ],
+                            }
+                        }
+                    }
+                }
+            )
+        assert urlparse(url).hostname == "upload.wikimedia.org"
+        return response(b"webm")
+
+    monkeypatch.setattr(video.urllib.request, "urlopen", open_url)
+    result = video._commons_asset("technology", tmp_path / "clip.mp4")
+    if expected:
+        asset, path = result
+        assert path.suffix == ".webm"
+        assert path.read_bytes() == b"webm"
+        assert asset["creator"] == "Demo creator"
+        assert asset["license"] == license_name
+        assert asset["license_url"].startswith("https://creativecommons.org/")
+    else:
+        assert result is None
+
+
 def test_manual_subtitle_layout_and_ass_escaping(tmp_path):
     path = tmp_path / "demo.ass"
     render_video.write_ass("Hello {demo}. Another sentence.", 4.0, path, "Demo", 64)
@@ -44,6 +111,7 @@ def test_local_render_generates_video_subtitles_and_credits(isolated_runtime, mo
     demo.main()
     monkeypatch.setattr(video.shutil, "which", lambda name: f"/demo/{name}")
     monkeypatch.setenv("TTS_BACKEND", "local")
+    monkeypatch.setattr(video, "_commons_asset", lambda *args: None)
     calls = []
 
     def executable(command, **kwargs):

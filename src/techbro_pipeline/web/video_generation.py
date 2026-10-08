@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 TZ = ZoneInfo("Asia/Jakarta")
 PEXELS_API = "https://api.pexels.com/v1/videos/search"
+COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 MAX_CLIP_BYTES = 24 * 1024 * 1024
 MAX_DAILY_RENDERS = 100  # praktis tanpa batas; cuma pengaman agar tidak loop tanpa henti
 MAX_TOTAL_RENDERS = 500  # pengaman disk
@@ -141,6 +142,127 @@ def _pexels_asset(query, api_key, destination):
                     "license": "Pexels License — review before publishing",
                 }
     except (urllib.error.URLError, TimeoutError, ValueError, OSError):
+        return None
+    return None
+
+
+def _commons_asset(query, destination):
+    """Download one Commons video with a reuse license we can record."""
+    headers = {
+        "User-Agent": "TechbroPipeline/0.2 (https://github.com/israhabibi/techbro-pipeline; video search)"
+    }
+    try:
+        words = [
+            word
+            for word in re.findall(r"[a-z0-9]+", query.lower())
+            if word not in {"technology", "computer", "software", "vertical", "and", "the"}
+        ]
+        searches = [" ".join(words[:2])] if words else []
+        if not searches or searches[0] != "computer":
+            searches.append("computer")
+        for search in searches:
+            params = urllib.parse.urlencode(
+                {
+                    "action": "query",
+                    "format": "json",
+                    "generator": "search",
+                    "gsrnamespace": 6,
+                    "gsrlimit": 15,
+                    "gsrsearch": f'{search} filetype:video -"fair use"',
+                    "prop": "imageinfo",
+                    "iiprop": "url|mime|size|extmetadata",
+                }
+            )
+            request = urllib.request.Request(f"{COMMONS_API}?{params}", headers=headers)
+            with urllib.request.urlopen(request, timeout=12) as response:
+                pages = (
+                    json.loads(response.read().decode("utf-8")).get("query", {}).get("pages", {})
+                )
+            for page in pages.values():
+                title = page.get("title")
+                if not isinstance(title, str) or not title.startswith("File:"):
+                    continue
+                image = (page.get("imageinfo") or [{}])[0]
+                metadata = image.get("extmetadata") or {}
+
+                def metadata_value(key, fields=metadata):
+                    value = fields.get(key, {})
+                    return re.sub(r"<[^>]*>", "", str(value.get("value", ""))).strip()
+
+                license_name = metadata_value("LicenseShortName")
+                license_url = metadata_value("LicenseUrl")
+                normalized_license = license_name.lower()
+                # Automatically use only licenses that allow modifications and do
+                # not impose ShareAlike or non-commercial restrictions.
+                allowed = (
+                    normalized_license.startswith("cc0") or "public domain" in normalized_license
+                )
+                allowed = allowed or (
+                    normalized_license.startswith("cc by ")
+                    and "sa" not in normalized_license
+                    and "nc" not in normalized_license
+                    and "nd" not in normalized_license
+                )
+                if not allowed or not license_url:
+                    continue
+
+                source_url = image.get("descriptionurl")
+                file_url = image.get("url")
+                mime = image.get("mime", "")
+                source = urllib.parse.urlparse(source_url or "")
+                if source.scheme != "https" or source.hostname != "commons.wikimedia.org":
+                    continue
+                license = urllib.parse.urlparse(license_url)
+                if license.scheme != "https" or license.hostname != "creativecommons.org":
+                    continue
+                creator = metadata_value("Artist") or metadata_value("Credit")
+                if normalized_license.startswith("cc by ") and not creator:
+                    continue
+                parsed = urllib.parse.urlparse(file_url or "")
+                extension = Path(parsed.path).suffix.lower()
+                video_mime = mime.startswith("video/") or (
+                    mime == "application/ogg" and extension in {".ogv", ".ogg"}
+                )
+                if (
+                    parsed.scheme != "https"
+                    or parsed.hostname != "upload.wikimedia.org"
+                    or not video_mime
+                    or extension
+                    not in {
+                        ".mp4",
+                        ".webm",
+                        ".ogv",
+                        ".ogg",
+                        ".mkv",
+                        ".mov",
+                        ".mpeg",
+                        ".mpg",
+                        ".avi",
+                    }
+                ):
+                    continue
+                if int(image.get("size", 0) or 0) > MAX_CLIP_BYTES:
+                    continue
+                request = urllib.request.Request(file_url, headers=headers)
+                with urllib.request.urlopen(request, timeout=25) as response:
+                    if int(response.headers.get("Content-Length", "0") or 0) > MAX_CLIP_BYTES:
+                        continue
+                    data = response.read(MAX_CLIP_BYTES + 1)
+                if len(data) > MAX_CLIP_BYTES or not data:
+                    continue
+                target = destination.with_suffix(extension)
+                target.write_bytes(data)
+                return (
+                    {
+                        "type": "wikimedia_commons",
+                        "source": source_url,
+                        "creator": creator,
+                        "license": license_name,
+                        "license_url": license_url,
+                    },
+                    target,
+                )
+    except (urllib.error.URLError, TimeoutError, ValueError, OSError, TypeError):
         return None
     return None
 
@@ -359,9 +481,15 @@ def _render_daily_video(data_dir, day, script, pexels_key="", assets_dir=None):
                     }
                 )
                 continue
-            asset = _pexels_asset(_search_terms(title), pexels_key, downloaded)
+            query = _search_terms(title)
+            asset = _pexels_asset(query, pexels_key, downloaded)
+            clip = downloaded
+            if not asset:
+                commons_result = _commons_asset(query, downloaded)
+                if commons_result:
+                    asset, clip = commons_result
             if asset:
-                clips.append(downloaded)
+                clips.append(clip)
                 asset["topic"] = title
                 credits.append(asset)
             else:
@@ -406,6 +534,7 @@ def _render_daily_video(data_dir, day, script, pexels_key="", assets_dir=None):
         "credits": credits_path.name,
         "duration_seconds": round(duration, 1),
         "pexels_used": sum(a["type"] == "pexels" for a in credits),
+        "commons_used": sum(a["type"] == "wikimedia_commons" for a in credits),
         "local_clips": sum(a["type"] == "local" for a in credits),
         "motion_cards": sum(a["type"] == "generated" for a in credits),
     }
