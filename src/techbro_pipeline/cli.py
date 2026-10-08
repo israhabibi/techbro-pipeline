@@ -15,6 +15,7 @@ STAGES = {
     "render": "render_video",
     "demo": "demo",
     "repliz": "repliz",
+    "meta": "meta",
 }
 
 
@@ -24,7 +25,7 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     for command in [*STAGES, "serve", "pipeline"]:
         child = commands.add_parser(
-            command, add_help=command not in {"scan", "render", "repliz", "serve"}
+            command, add_help=command not in {"scan", "render", "repliz", "meta", "serve"}
         )
         child.add_argument("--env-file", type=Path, default=argparse.SUPPRESS)
     args, remaining = parser.parse_known_args(argv)

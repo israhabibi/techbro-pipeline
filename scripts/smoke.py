@@ -30,7 +30,7 @@ def clean_environment():
             "PYTHONPATH",
             "VIRTUAL_ENV",
             "UV_PROJECT_ENVIRONMENT",
-        } or key.startswith(("X_", "REPLIZ_")):
+        } or key.startswith(("X_", "REPLIZ_", "THREADS_")):
             env.pop(key, None)
     return env
 
@@ -75,6 +75,18 @@ def main():
         assert json.loads(preview.stdout)["mode"] == "preview"
         assert not (folder / "data" / "repliz").exists()
         print("Repliz smoke passed: packaged preview with no keys or submission")
+        preview = subprocess.run(
+            [sys.executable, "-m", "techbro_pipeline.cli", "meta", "publish", "--date", day],
+            cwd=folder,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
+        )
+        assert json.loads(preview.stdout)["mode"] == "preview"
+        assert not (folder / "data" / "meta").exists()
+        print("Meta smoke passed: packaged preview with no token or publication")
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             port = listener.getsockname()[1]

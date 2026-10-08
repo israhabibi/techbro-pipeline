@@ -56,6 +56,7 @@ def test_smoke_retries_connection_reset_and_stops_server(monkeypatch):
     assert calls[0] == calls[1]
     assert terminated == [True]
     assert "repliz" in commands[1] and "--submit" not in commands[1]
+    assert "meta" in commands[2] and "--submit" not in commands[2]
 
 
 def test_clean_checkout_environment_excludes_publishing_configuration(monkeypatch):
@@ -68,6 +69,9 @@ def test_clean_checkout_environment_excludes_publishing_configuration(monkeypatc
         "REPLIZ_SECRET_KEY",
         "REPLIZ_ACCOUNT_ID",
         "REPLIZ_AUTO_SCHEDULE",
+        "THREADS_ACCESS_TOKEN",
+        "THREADS_AUTO_PUBLISH",
+        "THREADS_USER_ID",
     ):
         monkeypatch.setenv(name, "synthetic")
-    assert not any(name.startswith("REPLIZ_") for name in smoke.clean_environment())
+    assert not any(name.startswith(("REPLIZ_", "THREADS_")) for name in smoke.clean_environment())

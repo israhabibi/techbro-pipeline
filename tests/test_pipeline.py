@@ -104,7 +104,7 @@ def test_default_pipeline_never_schedules_posts(monkeypatch):
     monkeypatch.setattr(pipeline.subprocess, "run", stage)
     assert pipeline.run() == 0
     assert len(calls) == 5
-    assert all("repliz" not in command for command in calls)
+    assert all("repliz" not in command and "meta" not in command for command in calls)
 
 
 @pytest.mark.parametrize("publish_code", [0, 1])
@@ -160,3 +160,55 @@ def test_missing_daily_publish_time_returns_failure(isolated_runtime, monkeypatc
     )
     assert pipeline.run() == 1
     assert "=== FAILED Repliz ===" in (data / "pipeline.log").read_text()
+
+
+@pytest.mark.parametrize("publish_code", [0, 1])
+def test_meta_opt_in_publishes_only_after_all_stages_and_propagates_failure(
+    isolated_runtime, monkeypatch, publish_code
+):
+    data, _ = isolated_runtime
+    monkeypatch.setenv("THREADS_AUTO_PUBLISH", "true")
+    calls = []
+
+    def stage(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(
+            command, publish_code if "meta" in command else 0, "completed"
+        )
+
+    monkeypatch.setattr(pipeline.subprocess, "run", stage)
+    assert pipeline.run() == publish_code
+    assert len(calls) == 6
+    assert calls[-1][3:5] == ["meta", "publish"] and "--submit" in calls[-1]
+    assert calls[-1][calls[-1].index("--date") + 1] == day_stamp()
+    assert all("repliz" not in call for call in calls)
+    log = (data / "pipeline.log").read_text()
+    if publish_code:
+        assert "=== FAILED Meta ===" in log and "=== DONE" not in log
+        assert build_status(str(data), day_stamp())["overall"] == "fail"
+    else:
+        assert "=== DONE" in log
+
+
+def test_enabling_two_publishers_is_rejected_before_collecting(monkeypatch):
+    monkeypatch.setenv("THREADS_AUTO_PUBLISH", "true")
+    monkeypatch.setenv("REPLIZ_AUTO_SCHEDULE", "true")
+    monkeypatch.setattr(
+        pipeline.subprocess,
+        "run",
+        lambda *args, **kwargs: pytest.fail("must not collect or publish"),
+    )
+    assert pipeline.run() == 1
+
+
+def test_failed_collection_never_reaches_meta(monkeypatch):
+    monkeypatch.setenv("THREADS_AUTO_PUBLISH", "true")
+    calls = []
+
+    def stage(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 1, "failed")
+
+    monkeypatch.setattr(pipeline.subprocess, "run", stage)
+    assert pipeline.run() == 1
+    assert len(calls) == 1 and "meta" not in calls[0]

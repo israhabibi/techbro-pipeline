@@ -17,6 +17,8 @@ flowchart LR
   Draft --> Web
   Draft --> Publisher[Optional Repliz scheduler]
   Publisher --> Threads[Threads reply chain]
+  Draft --> Meta[Optional official Meta publisher]
+  Meta --> Threads
   Web --> Video[Local narration and FFmpeg]
 ```
 
@@ -46,6 +48,19 @@ shared `DATA_DIR`. A pending or unknown outcome requires dashboard reconciliatio
 before retrying, because Repliz does not document an idempotency key. An accepted
 schedule is not proof that Threads has published it. Automatic scheduling is an
 explicit opt-in after the normal stages; failures propagate to the pipeline.
+
+`meta.py` calls the official Threads Graph API using a user token in an
+Authorization header. It verifies that the token's profile matches the explicit
+`THREADS_USER_ID`, then creates and publishes one text container per draft part.
+Each reply targets the preceding published post. The publisher writes progress
+before requests and saves container/post IDs under `DATA_DIR/meta/`. Known
+completed parts are skipped on resume. A container creation failure can be retried
+without reposting completed parts, because creation never auto-publishes. A lost
+publish response blocks retries until the outcome has been reconciled, avoiding
+duplicate posts when a remote side effect cannot be confirmed. Token refresh
+saves the new credential to an explicitly selected local environment file and
+prints only expiry metadata. Meta and Repliz publishing are both off by default;
+the pipeline rejects simultaneous opt-in.
 
 Templates ship inside the wheel, so the server can start outside the checkout.
 The dashboard reads JSON rather than requiring a database. Chat and optional

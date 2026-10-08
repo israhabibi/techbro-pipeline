@@ -69,3 +69,12 @@ def test_environment_file_can_follow_the_command(tmp_path, monkeypatch):
     monkeypatch.setattr(scan, "main", lambda pages: received.append(pages))
     assert cli.main(["scan", "--env-file", str(path)]) == 0
     assert received == [7]
+
+
+def test_meta_help_describes_publishing_and_token_maintenance(capsys):
+    with pytest.raises(SystemExit) as result:
+        cli.main(["meta", "--help"])
+    assert result.value.code == 0
+    help_text = capsys.readouterr().out
+    assert "usage: techbro meta" in help_text
+    assert "profile" in help_text and "publish" in help_text and "refresh" in help_text

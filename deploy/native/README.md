@@ -28,6 +28,10 @@ one existing authenticated HTTPS reverse proxy (or Caddy).
    Add `PEXELS_API_KEY` only if external video clips are wanted. The web account
    cannot read the scanner's credential file. Environment variables are passed
    by systemd; `.env` is not required for these services.
+   For the optional [official Threads publisher](../../docs/meta-threads.md), add
+   `THREADS_ACCESS_TOKEN` and the verified `THREADS_USER_ID` to this protected
+   environment file. Set `THREADS_AUTO_PUBLISH=true` only when automatic posting
+   at pipeline completion is wanted. Keep `REPLIZ_AUTO_SCHEDULE=false`.
 4. Install the three `techbro-*.service`/`.timer` files in `/etc/systemd/system/`.
    Run `systemd-analyze verify` on them, then `systemctl daemon-reload`.
 5. Configure your single ingress. `Caddyfile.example` uses HTTPS and basic auth;

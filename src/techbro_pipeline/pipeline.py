@@ -18,6 +18,14 @@ STAGES = [
 
 
 def run():
+    meta_enabled = os.getenv("THREADS_AUTO_PUBLISH", "false").lower() in {"1", "true", "yes"}
+    repliz_enabled = os.getenv("REPLIZ_AUTO_SCHEDULE", "false").lower() in {"1", "true", "yes"}
+    if meta_enabled and repliz_enabled:
+        print(
+            "[error] choose only one publisher: THREADS_AUTO_PUBLISH or REPLIZ_AUTO_SCHEDULE",
+            file=sys.stderr,
+        )
+        return 1
     settings = Settings.from_env()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     with (settings.data_dir / ".pipeline.lock").open("a", encoding="utf-8") as lock:
@@ -56,7 +64,37 @@ def run():
                     emit(f"[error] {command} exited with code {result.returncode}")
                     emit(f"=== FAILED {index} ===")
                     return result.returncode if result.returncode > 0 else 1
-            if os.getenv("REPLIZ_AUTO_SCHEDULE", "false").lower() in {"1", "true", "yes"}:
+            if meta_enabled:
+                emit("=== Meta Threads publishing ===")
+                try:
+                    result = subprocess.run(
+                        [
+                            sys.executable,
+                            "-m",
+                            "techbro_pipeline.cli",
+                            "meta",
+                            "publish",
+                            "--date",
+                            run_day,
+                            "--submit",
+                        ],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        env=os.environ.copy(),
+                        timeout=900,
+                    )
+                except (subprocess.TimeoutExpired, OSError) as exc:
+                    emit(f"[error] Meta publishing failed: {type(exc).__name__}")
+                    emit("=== FAILED Meta ===")
+                    return 1
+                if result.stdout:
+                    emit(result.stdout.rstrip())
+                if result.returncode:
+                    emit("[error] Meta publishing failed; inspect the publication receipt")
+                    emit("=== FAILED Meta ===")
+                    return 1
+            if repliz_enabled:
                 from techbro_pipeline.repliz import ReplizError, daily_schedule_time
 
                 emit("=== Repliz scheduling ===")

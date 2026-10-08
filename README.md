@@ -69,9 +69,12 @@ The ordered stages are scan → RSS sources → topics → Threads draft → CSV
 They run in the same interpreter and stop on failure. Failed collection or topic
 extraction preserves previous artifacts. RSS is optional unless explicitly enabled
 with `ENABLE_SUPPLEMENTAL_RSS=1`. Publishing is off by default. The optional
-[Repliz integration](docs/repliz.md) previews drafts and can schedule their reply
-chains. Set `REPLIZ_AUTO_SCHEDULE=true` only to opt into live scheduling after
-all pipeline stages succeed.
+[official Meta Threads integration](docs/meta-threads.md) previews drafts and
+publishes ordered reply chains. Set `THREADS_AUTO_PUBLISH=true` only to opt into
+immediate publishing after all pipeline stages succeed. For scheduled posting,
+run the pipeline through cron/systemd at the desired time. The alternative
+[Repliz integration](docs/repliz.md) remains optional; enabling both publishers is
+rejected before a pipeline run.
 The X session interface is unofficial and can change; valid credentials do not
 guarantee access. Live model extraction and chat require `ADACODE_API_KEY`.
 
@@ -90,6 +93,10 @@ Configuration:
 | `TTS_BACKEND` | `local`; `edge` opts into the online TTS extra |
 | `PEXELS_API_KEY` | Unset; optional external video clips |
 | `VIDEO_ASSETS_DIR` | Unset; optional administrator-selected scene directory |
+| `THREADS_APP_ID` | Unset; Threads app identity for Meta setup; posting uses the user token |
+| `THREADS_ACCESS_TOKEN` | Unset; Threads user access token with publishing permission |
+| `THREADS_USER_ID` | Unset; explicit target from `techbro meta profile`, distinct from app ID |
+| `THREADS_AUTO_PUBLISH` | `false`; opt into immediate Meta publishing after a successful pipeline |
 | `REPLIZ_ACCESS_KEY` / `REPLIZ_SECRET_KEY` | Unset; server-side Repliz API credentials |
 | `REPLIZ_ACCOUNT_ID` | Unset; connected Threads account ID |
 | `REPLIZ_AUTO_SCHEDULE` | `false`; opt into live scheduling after a successful pipeline |
