@@ -66,7 +66,12 @@ def make_parts(data):
         }
     ]
     for item in topics:
-        title = (item.get("topic") or "Topik techbro").strip()[:160]
+        title = (
+            (item.get("topic") or "Topik techbro")
+            .strip()
+            .encode("utf-8")[:160]
+            .decode("utf-8", errors="ignore")
+        )
         summary = clean(item.get("summary"))
         context = clean(item.get("context"))
         value = clean(item.get("value_added"))
@@ -84,15 +89,15 @@ def make_parts(data):
         )
         for label, sentence in candidates:
             addition = f" {label}{sentence}"
-            if len(prefix + line + addition) <= 500:
+            if len((prefix + line + addition).encode("utf-8")) <= 500:
                 line += addition
 
         # Attribution is useful, but never let it push a complete sentence over
-        # Threads' 500-character limit.
+        # Repliz's documented 500-byte UTF-8 limit.
         for suffix in ([f" · {count} tweet"] if count else []) + (
             [" · " + ", ".join(handles[:3])] if handles else []
         ):
-            if len(prefix + line + suffix) <= 500:
+            if len((prefix + line + suffix).encode("utf-8")) <= 500:
                 line += suffix
         parts.append({"kind": "topic", "topic": title, "text": line})
 

@@ -1,5 +1,6 @@
 """Isolated fixtures and network guards for deterministic tests."""
 
+import os
 import urllib.request
 
 import httpx
@@ -18,6 +19,9 @@ def isolated_runtime(tmp_path, monkeypatch):
     monkeypatch.setenv("CREDS_FILE", str(tmp_path / "missing-creds.json"))
     monkeypatch.delenv("ADACODE_API_KEY", raising=False)
     monkeypatch.delenv("ENABLE_SUPPLEMENTAL_RSS", raising=False)
+    for key in list(os.environ):
+        if key.startswith("REPLIZ_"):
+            monkeypatch.delenv(key)
     for module in (scan, sources, topic_tracker, build_threads_draft, build_dataset):
         monkeypatch.setattr(module, "DATA", str(data))
     monkeypatch.setattr(build_dataset, "OUT", str(dataset))

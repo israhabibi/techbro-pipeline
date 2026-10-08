@@ -2,6 +2,8 @@ import fcntl
 import subprocess
 import sys
 
+import pytest
+
 from techbro_pipeline import demo, pipeline
 from techbro_pipeline.config import day_stamp, write_json
 from techbro_pipeline.web.pipeline_status import build_status
@@ -90,3 +92,71 @@ def test_demo_refuses_to_replace_existing_feed(isolated_runtime):
     write_json(data / "feed" / f"feed_{day_stamp()}.json", {"tweets": []})
     with pytest.raises(SystemExit, match="refuses"):
         demo.main()
+
+
+def test_default_pipeline_never_schedules_posts(monkeypatch):
+    calls = []
+
+    def stage(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "completed")
+
+    monkeypatch.setattr(pipeline.subprocess, "run", stage)
+    assert pipeline.run() == 0
+    assert len(calls) == 5
+    assert all("repliz" not in command for command in calls)
+
+
+@pytest.mark.parametrize("publish_code", [0, 1])
+def test_opt_in_schedules_only_after_all_stages_and_propagates_failure(
+    isolated_runtime, monkeypatch, publish_code
+):
+    data, _ = isolated_runtime
+    monkeypatch.setenv("REPLIZ_AUTO_SCHEDULE", "true")
+    monkeypatch.setenv("REPLIZ_SCHEDULE_TIME", "10:00")
+    calls = []
+
+    def stage(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(
+            command, publish_code if "repliz" in command else 0, "completed"
+        )
+
+    monkeypatch.setattr(pipeline.subprocess, "run", stage)
+    assert pipeline.run() == publish_code
+    assert len(calls) == 6
+    assert calls[-1][3:5] == ["repliz", "schedule"]
+    assert "--submit" in calls[-1]
+    assert calls[-1][calls[-1].index("--date") + 1] == day_stamp()
+    log = (data / "pipeline.log").read_text()
+    if publish_code:
+        assert "=== FAILED Repliz ===" in log
+        assert "=== DONE" not in log
+        assert build_status(str(data), day_stamp())["overall"] == "fail"
+    else:
+        assert "=== DONE" in log
+
+
+def test_failed_collection_never_reaches_repliz(monkeypatch):
+    monkeypatch.setenv("REPLIZ_AUTO_SCHEDULE", "true")
+    calls = []
+
+    def stage(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 1, "failed")
+
+    monkeypatch.setattr(pipeline.subprocess, "run", stage)
+    assert pipeline.run() == 1
+    assert len(calls) == 1 and "repliz" not in calls[0]
+
+
+def test_missing_daily_publish_time_returns_failure(isolated_runtime, monkeypatch):
+    data, _ = isolated_runtime
+    monkeypatch.setenv("REPLIZ_AUTO_SCHEDULE", "true")
+    monkeypatch.setattr(
+        pipeline.subprocess,
+        "run",
+        lambda command, **kwargs: subprocess.CompletedProcess(command, 0, "completed"),
+    )
+    assert pipeline.run() == 1
+    assert "=== FAILED Repliz ===" in (data / "pipeline.log").read_text()

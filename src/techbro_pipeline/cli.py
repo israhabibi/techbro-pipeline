@@ -14,6 +14,7 @@ STAGES = {
     "dataset": "build_dataset",
     "render": "render_video",
     "demo": "demo",
+    "repliz": "repliz",
 }
 
 

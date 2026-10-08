@@ -62,6 +62,14 @@ def test_no_topics_produces_no_draft():
     assert build_threads_draft.make_parts({"topics": []}) == []
 
 
+def test_generated_unicode_draft_fits_repliz_limit_and_keeps_complete_sentences(sample_topic):
+    topic = dict(sample_topic, topic="🙂" * 200, summary="🙂" * 120 + ". Complete sentence.")
+    parts = build_threads_draft.make_parts({"topics": [topic], "total_tweets_scanned": 1})
+    assert all(len(part["text"].encode("utf-8")) <= 500 for part in parts)
+    assert "Complete sentence." in parts[1]["text"]
+    assert "🙂" * 120 not in parts[1]["text"]
+
+
 def test_dataset_deduplicates_and_filters_month(isolated_runtime):
     data, dataset = isolated_runtime
     tweet = {

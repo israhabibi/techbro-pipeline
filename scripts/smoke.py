@@ -9,6 +9,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 
@@ -29,7 +30,7 @@ def clean_environment():
             "PYTHONPATH",
             "VIRTUAL_ENV",
             "UV_PROJECT_ENVIRONMENT",
-        } or key.startswith("X_"):
+        } or key.startswith(("X_", "REPLIZ_")):
             env.pop(key, None)
     return env
 
@@ -47,6 +48,33 @@ def main():
             check=True,
             timeout=30,
         )
+        # Preview the packaged Repliz command offline, with a fictional account.
+        day = next((folder / "data" / "threads").glob("threads_draft_*.json")).stem.removeprefix(
+            "threads_draft_"
+        )
+        preview_env = {**env, "REPLIZ_ACCOUNT_ID": "fictional-threads-account"}
+        preview = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "techbro_pipeline.cli",
+                "repliz",
+                "schedule",
+                "--date",
+                day,
+                "--at",
+                (datetime.now(UTC) + timedelta(days=1)).isoformat(),
+            ],
+            cwd=folder,
+            env=preview_env,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
+        )
+        assert json.loads(preview.stdout)["mode"] == "preview"
+        assert not (folder / "data" / "repliz").exists()
+        print("Repliz smoke passed: packaged preview with no keys or submission")
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             port = listener.getsockname()[1]

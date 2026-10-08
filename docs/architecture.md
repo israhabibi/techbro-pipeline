@@ -15,6 +15,8 @@ flowchart LR
   TopicJSON --> Web
   SourceJSON --> Web
   Draft --> Web
+  Draft --> Publisher[Optional Repliz scheduler]
+  Publisher --> Threads[Threads reply chain]
   Web --> Video[Local narration and FFmpeg]
 ```
 
@@ -34,6 +36,16 @@ same `DATA_DIR` and `DATASET_DIR`. Importing a module does not create directorie
 or read credentials. The demo supplies fictional inputs to the normal collection,
 topic, draft, and dataset implementations. Runtime API calls stay behind tests'
 network guards and mocks.
+
+`repliz.py` validates the exact requested draft date, account connection, publish
+time, and Repliz's UTF-8 text budget before scheduling a text post and ordered
+replies. Preview requires no API credentials and performs no network calls.
+Submission uses server-side Basic Auth against a fixed HTTPS origin. Atomic
+receipts and an account/day file lock prevent repeat submissions from the same
+shared `DATA_DIR`. A pending or unknown outcome requires dashboard reconciliation
+before retrying, because Repliz does not document an idempotency key. An accepted
+schedule is not proof that Threads has published it. Automatic scheduling is an
+explicit opt-in after the normal stages; failures propagate to the pipeline.
 
 Templates ship inside the wheel, so the server can start outside the checkout.
 The dashboard reads JSON rather than requiring a database. Chat and optional

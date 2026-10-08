@@ -16,7 +16,17 @@ def test_smoke_retries_connection_reset_and_stops_server(monkeypatch):
     server = SimpleNamespace(
         poll=lambda: None, terminate=lambda: terminated.append(True), wait=lambda **kwargs: 0
     )
-    monkeypatch.setattr(smoke.subprocess, "run", lambda *args, **kwargs: None)
+    commands = []
+
+    def run(command, **kwargs):
+        commands.append(command)
+        if "demo" in command:
+            drafts = Path(kwargs["env"]["DATA_DIR"]) / "threads"
+            drafts.mkdir(parents=True)
+            (drafts / "threads_draft_20260101.json").write_text("{}")
+        return SimpleNamespace(stdout='{"mode": "preview"}')
+
+    monkeypatch.setattr(smoke.subprocess, "run", run)
     monkeypatch.setattr(smoke.subprocess, "Popen", lambda *args, **kwargs: server)
     monkeypatch.setattr(smoke.time, "sleep", lambda _: None)
     calls = []
@@ -45,3 +55,19 @@ def test_smoke_retries_connection_reset_and_stops_server(monkeypatch):
     assert smoke.main() == 0
     assert calls[0] == calls[1]
     assert terminated == [True]
+    assert "repliz" in commands[1] and "--submit" not in commands[1]
+
+
+def test_clean_checkout_environment_excludes_publishing_configuration(monkeypatch):
+    path = Path(__file__).resolve().parents[1] / "scripts" / "smoke.py"
+    spec = importlib.util.spec_from_file_location("techbro_smoke_environment", path)
+    smoke = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(smoke)
+    for name in (
+        "REPLIZ_ACCESS_KEY",
+        "REPLIZ_SECRET_KEY",
+        "REPLIZ_ACCOUNT_ID",
+        "REPLIZ_AUTO_SCHEDULE",
+    ):
+        monkeypatch.setenv(name, "synthetic")
+    assert not any(name.startswith("REPLIZ_") for name in smoke.clean_environment())
