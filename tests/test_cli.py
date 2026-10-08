@@ -50,3 +50,22 @@ def test_environment_file_is_explicit_and_preserves_exported_values(tmp_path, mo
     assert received == [2]
     with pytest.raises(SystemExit):
         cli.main(["--env-file", str(tmp_path / "absent"), "scan"])
+
+
+def test_repliz_help_describes_its_commands(capsys):
+    with pytest.raises(SystemExit) as result:
+        cli.main(["repliz", "--help"])
+    assert result.value.code == 0
+    help_text = capsys.readouterr().out
+    assert "usage: techbro repliz" in help_text
+    assert "accounts" in help_text and "schedule" in help_text and "status" in help_text
+
+
+def test_environment_file_can_follow_the_command(tmp_path, monkeypatch):
+    path = tmp_path / "demo.env"
+    path.write_text("SCAN_PAGES=7\n", encoding="utf-8")
+    monkeypatch.delenv("SCAN_PAGES", raising=False)
+    received = []
+    monkeypatch.setattr(scan, "main", lambda pages: received.append(pages))
+    assert cli.main(["scan", "--env-file", str(path)]) == 0
+    assert received == [7]

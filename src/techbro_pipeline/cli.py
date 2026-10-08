@@ -21,7 +21,12 @@ STAGES = {
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Techbro pipeline and dashboard")
     parser.add_argument("--env-file", type=Path, help="Explicit local environment file")
-    parser.add_argument("command", choices=[*STAGES, "serve", "pipeline"])
+    commands = parser.add_subparsers(dest="command", required=True)
+    for command in [*STAGES, "serve", "pipeline"]:
+        child = commands.add_parser(
+            command, add_help=command not in {"scan", "render", "repliz", "serve"}
+        )
+        child.add_argument("--env-file", type=Path, default=argparse.SUPPRESS)
     args, remaining = parser.parse_known_args(argv)
     if args.env_file:
         if not args.env_file.is_file():
