@@ -341,7 +341,8 @@ def main(pages=3):
         if not cursor:
             break
         time.sleep(2)
-    # Use tweet content as fallback when profile metadata is inconclusive.
+    # Tweet content can identify technical posts, but it cannot establish that
+    # an account belongs to Indonesia. Keep those signals separate.
     tweet_signals = {}
     for t in all_tweets.values():
         uid = t.get("user_id_str") or (t.get("user") or {}).get("id_str")
@@ -354,10 +355,7 @@ def main(pages=3):
     for uid, u in all_users.items():
         is_tb, reasons, score = classify_user(u)
         signals = list(dict.fromkeys(tweet_signals.get(uid, [])))[:3]
-        if signals:
-            is_tb = True
-            score = max(score, 3)
-            reasons.extend(f"tweet:{signal}" for signal in signals)
+        reasons.extend(f"tweet:{signal}" for signal in signals)
         classified[uid] = {
             "screen_name": u.get("screen_name"),
             "name": u.get("name"),

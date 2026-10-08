@@ -51,7 +51,7 @@ def test_scanner_rejects_unsupported_response(monkeypatch):
     assert scan.main(1) == 1
 
 
-def test_scanner_classifies_tweet_when_profile_is_inconclusive(isolated_runtime, monkeypatch):
+def test_technical_tweet_does_not_make_global_account_indonesian(isolated_runtime, monkeypatch):
     data, _ = isolated_runtime
     monkeypatch.setattr(scan, "load_creds", lambda: {})
     monkeypatch.setattr(
@@ -72,8 +72,10 @@ def test_scanner_classifies_tweet_when_profile_is_inconclusive(isolated_runtime,
     )
     assert scan.main(1) is None
     feed = json.loads((data / "feed" / f"feed_{day_stamp()}.json").read_text())
-    assert feed["tweets"][0]["is_techbro_id"] is True
+    assert feed["tweets"][0]["is_techbro_id"] is False
+    assert feed["tweets"][0]["is_tech_tweet"] is True
     assert feed["tweets"][0]["tweet_tech_signal"] == "kubernetes"
+    assert feed["users"][0]["reasons"] == ["tweet:kubernetes"]
 
 
 def test_partial_scan_failure_does_not_replace_feed(isolated_runtime, monkeypatch):
