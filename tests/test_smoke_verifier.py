@@ -72,6 +72,12 @@ def test_clean_checkout_environment_excludes_publishing_configuration(monkeypatc
         "THREADS_ACCESS_TOKEN",
         "THREADS_AUTO_PUBLISH",
         "THREADS_USER_ID",
+        "AI_WORKFLOW_AUTO_ENQUEUE",
+        "AI_WORKFLOW_HOME",
+        "AI_WORKFLOW_EXECUTABLE",
     ):
         monkeypatch.setenv(name, "synthetic")
-    assert not any(name.startswith(("REPLIZ_", "THREADS_")) for name in smoke.clean_environment())
+    assert not any(
+        name.startswith(("REPLIZ_", "THREADS_", "AI_WORKFLOW_"))
+        for name in smoke.clean_environment()
+    )

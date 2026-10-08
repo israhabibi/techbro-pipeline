@@ -29,3 +29,26 @@ Use focused imperative commits. PRs explain the observable change, motivation,
 verification, and configuration/migration steps; include screenshots for visual
 changes. Before release, verify the remote Git revision in a new checkout using
 `uv run --locked python scripts/verify_checkout.py`.
+
+## Everyday Techbro publishing
+
+Use the repository's `./techbro` launcher for local operations. It selects the
+project directory, installed environment and local `.env`. A local `techbro`
+command may point to this launcher, so agents can use the same shortcuts:
+
+- `techbro antrean`: list jobs; no approval or dispatch.
+- `techbro lihat`: show today's source draft; `techbro lihat YYYYMMDD` selects a date.
+- `techbro lihat JOB_ID`: show the exact saved queued release for review.
+- `techbro siapkan`: run collection through dataset, then enqueue when configured.
+- `techbro setujui JOB_ID`: approve that reviewed job; no dispatch.
+- `techbro kirim`: process already approved, due jobs in the workspace.
+
+Requests to prepare or display a draft do not authorize publication. When the
+user authorizes publishing a specific reviewed release, use that job ID for
+approval and then dispatch; retain authorization already given in the session.
+Never approve an unspecified job merely to make the worker do something.
+Native Threads polling can require another worker invocation after a delay.
+Inspect `workflow status` and `workflow events` on failure or uncertainty.
+Preserve legacy receipts; enqueue rejects dates with recorded legacy submissions.
+See `docs/ai-workflow.md` for setup and detailed operations. Implementation still
+belongs in the package; the launcher is only a compatibility entrypoint.

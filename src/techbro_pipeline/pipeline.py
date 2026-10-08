@@ -18,6 +18,8 @@ STAGES = [
 
 
 def run():
+    from techbro_pipeline import workflow
+
     meta_enabled = os.getenv("THREADS_AUTO_PUBLISH", "false").lower() in {"1", "true", "yes"}
     repliz_enabled = os.getenv("REPLIZ_AUTO_SCHEDULE", "false").lower() in {"1", "true", "yes"}
     if meta_enabled and repliz_enabled:
@@ -26,6 +28,13 @@ def run():
             file=sys.stderr,
         )
         return 1
+    if workflow.enabled():
+        try:
+            workflow.check_publishers()
+            workflow.check_workspace()
+        except workflow.WorkflowError as exc:
+            print(f"[error] {exc}", file=sys.stderr)
+            return 1
     settings = Settings.from_env()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     with (settings.data_dir / ".pipeline.lock").open("a", encoding="utf-8") as lock:
@@ -64,6 +73,15 @@ def run():
                     emit(f"[error] {command} exited with code {result.returncode}")
                     emit(f"=== FAILED {index} ===")
                     return result.returncode if result.returncode > 0 else 1
+            if workflow.enabled():
+                emit("=== ai-workflow draft queue ===")
+                try:
+                    queued = workflow.draft_operation("enqueue", run_day)
+                except workflow.WorkflowError as exc:
+                    emit(f"[error] {exc}")
+                    emit("=== FAILED ai-workflow ===")
+                    return 1
+                emit(f"[draft] job {queued['job_id']} queued for review; approval required")
             if meta_enabled:
                 emit("=== Meta Threads publishing ===")
                 try:

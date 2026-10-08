@@ -30,7 +30,7 @@ def clean_environment():
             "PYTHONPATH",
             "VIRTUAL_ENV",
             "UV_PROJECT_ENVIRONMENT",
-        } or key.startswith(("X_", "REPLIZ_", "THREADS_")):
+        } or key.startswith(("X_", "REPLIZ_", "THREADS_", "AI_WORKFLOW_")):
             env.pop(key, None)
     return env
 

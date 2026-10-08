@@ -29,3 +29,9 @@ dataset/*.csv
 dataset/GENERATED-README.md
 traefik.yml
 dynamic.yml
+*token*.json
+*credentials*.json
+*.pem
+*.key
+cookies*.txt
+*backup*.zip

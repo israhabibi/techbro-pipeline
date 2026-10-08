@@ -19,6 +19,9 @@ flowchart LR
   Publisher --> Threads[Threads reply chain]
   Draft --> Meta[Optional official Meta publisher]
   Meta --> Threads
+  Draft --> Outbox[Optional ai-workflow reviewed outbox]
+  Outbox --> Review[Explicit approval and worker]
+  Review --> Threads
   Web --> Video[Local narration and FFmpeg]
 ```
 

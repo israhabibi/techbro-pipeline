@@ -16,16 +16,21 @@ STAGES = {
     "demo": "demo",
     "repliz": "repliz",
     "meta": "meta",
+    "workflow": "workflow",
 }
+
+SHORTCUTS = ("lihat", "antrean", "setujui", "kirim")
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Techbro pipeline and dashboard")
     parser.add_argument("--env-file", type=Path, help="Explicit local environment file")
     commands = parser.add_subparsers(dest="command", required=True)
-    for command in [*STAGES, "serve", "pipeline"]:
+    for command in [*STAGES, "serve", "pipeline", "siapkan", *SHORTCUTS]:
         child = commands.add_parser(
-            command, add_help=command not in {"scan", "render", "repliz", "meta", "serve"}
+            command,
+            add_help=command
+            not in {"scan", "render", "repliz", "meta", "workflow", "serve", *SHORTCUTS},
         )
         child.add_argument("--env-file", type=Path, default=argparse.SUPPRESS)
     args, remaining = parser.parse_known_args(argv)
@@ -44,7 +49,11 @@ def main(argv=None):
         options = server.parse_args(remaining)
         uvicorn.run("techbro_pipeline.web.main:app", host=options.host, port=options.port)
         return 0
-    if args.command == "pipeline":
+    if args.command in SHORTCUTS:
+        from techbro_pipeline.quick import main as quick_main
+
+        return quick_main(args.command, remaining)
+    if args.command in ("pipeline", "siapkan"):
         if remaining:
             parser.error("pipeline does not accept extra arguments")
         from techbro_pipeline.pipeline import run

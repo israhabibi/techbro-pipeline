@@ -25,6 +25,21 @@ topics; it never calls X, a model provider, or news services. It writes under
 
 ## Commands
 
+On an already configured checkout, `./techbro` selects the local environment and
+configuration automatically. These shortcuts cover daily draft review and posting:
+
+```sh
+./techbro antrean          # list jobs
+./techbro lihat            # show today's draft
+./techbro lihat JOB_ID     # review the exact queued release
+./techbro siapkan          # collect and prepare a new draft
+./techbro setujui JOB_ID   # approve the reviewed job
+./techbro kirim            # process already approved jobs
+```
+
+The [ai-workflow guide](docs/ai-workflow.md) explains installing a `techbro`
+shortcut that works from any directory and the separation of review and dispatch.
+
 ```sh
 make test       # Python tests; no credentials or external services
 make lint       # Static checks and formatting verification
@@ -75,6 +90,11 @@ immediate publishing after all pipeline stages succeed. For scheduled posting,
 run the pipeline through cron/systemd at the desired time. The alternative
 [Repliz integration](docs/repliz.md) remains optional; enabling both publishers is
 rejected before a pipeline run.
+The [shared ai-workflow integration](docs/ai-workflow.md) can enqueue daily drafts
+after successful stages and provides `techbro workflow` commands for preview,
+explicit approval, worker dispatch, and status. Enable it with
+`AI_WORKFLOW_AUTO_ENQUEUE=true` and disable both legacy automatic publishers.
+Existing legacy publishing receipts prevent re-enqueueing that date.
 The X session interface is unofficial and can change; valid credentials do not
 guarantee access. Live model extraction and chat require `ADACODE_API_KEY`.
 
@@ -102,6 +122,10 @@ Configuration:
 | `REPLIZ_ACCOUNT_ID` | Unset; connected Threads account ID |
 | `REPLIZ_AUTO_SCHEDULE` | `false`; opt into live scheduling after a successful pipeline |
 | `REPLIZ_SCHEDULE_TIME` | Unset; required daily publish time, HH:MM in Asia/Jakarta |
+| `AI_WORKFLOW_EXECUTABLE` | `ai-workflow`; separately installed executable, or its absolute path |
+| `AI_WORKFLOW_HOME` | `DATA_DIR/workflow`; private reviewed outbox |
+| `AI_WORKFLOW_ACCOUNT` | `techbro-threads`; explicit target account name |
+| `AI_WORKFLOW_AUTO_ENQUEUE` | `false`; queue a draft after successful stages; approval remains explicit |
 | `TIME_ZONE` | JavaScript summarizer only; default `Asia/Jakarta` |
 
 Pipeline artifacts consistently use the Asia/Jakarta calendar date. The raw

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Run the configured local package from any directory, including through a symlink.
+set -euo pipefail
+launcher_path="$(readlink -f -- "${BASH_SOURCE[0]}")"
+project_dir="$(dirname -- "$launcher_path")"
+cd "$project_dir"
+if [[ ! -x "$project_dir/.venv/bin/techbro" ]]; then
+  printf '%s\n' 'Lingkungan Techbro belum terpasang. Jalankan uv sync --locked di folder proyek.' >&2
+  exit 127
+fi
+if [[ $# -eq 0 ]]; then
+  set -- antrean
+fi
+if [[ -f "$project_dir/.env" ]]; then
+  exec "$project_dir/.venv/bin/techbro" --env-file "$project_dir/.env" "$@"
+fi
+exec "$project_dir/.venv/bin/techbro" "$@"
