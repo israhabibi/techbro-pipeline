@@ -75,9 +75,6 @@ def make_parts(data):
         summary = clean(item.get("summary"))
         context = clean(item.get("context"))
         value = clean(item.get("value_added"))
-        handles = [
-            h if h.startswith("@") else "@" + h for h in (item.get("handles") or [])[:4] if h
-        ]
         count = item.get("count")
         line = f"{title}."
         prefix = "1/6 — "  # reserve room for the actual part number
@@ -92,11 +89,9 @@ def make_parts(data):
             if len((prefix + line + addition).encode("utf-8")) <= 500:
                 line += addition
 
-        # Attribution is useful, but never let it push a complete sentence over
-        # Repliz's documented 500-byte UTF-8 limit.
-        for suffix in ([f" · {count} tweet"] if count else []) + (
-            [" · " + ", ".join(handles[:3])] if handles else []
-        ):
+        # Keep the count, but omit source handles because they may be outdated
+        # or differ from the person's Threads username.
+        for suffix in [f" · {count} tweet"] if count else []:
             if len((prefix + line + suffix).encode("utf-8")) <= 500:
                 line += suffix
         parts.append({"kind": "topic", "topic": title, "text": line})

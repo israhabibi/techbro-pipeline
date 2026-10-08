@@ -58,6 +58,15 @@ def test_drafts_have_sequential_numbering_and_fit_post_limit(sample_topic):
     assert parts[1]["text"].startswith("2/3 — ")
 
 
+def test_threads_draft_omits_source_handles_but_keeps_topic_count(sample_topic):
+    topic = dict(sample_topic, handles=["old_handle", "@different_old_handle"], count=7)
+    parts = build_threads_draft.make_parts({"topics": [topic]})
+    topic_text = parts[1]["text"]
+    assert "old_handle" not in topic_text
+    assert "@" not in topic_text
+    assert "7 tweet" in topic_text
+
+
 def test_no_topics_produces_no_draft():
     assert build_threads_draft.make_parts({"topics": []}) == []
 
