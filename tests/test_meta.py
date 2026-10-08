@@ -78,6 +78,40 @@ def test_preview_needs_no_token_performs_no_network_and_creates_no_receipt(draft
     assert not meta.receipt_path(DAY, USER_ID).exists()
 
 
+def test_public_media_url_requires_https_public_host():
+    filename = f"techbro-{DAY}-120000-abcd1234.mp4"
+    assert meta.public_media_url("https://videos.example.com/app/", DAY, filename) == (
+        f"https://videos.example.com/app/api/daily/{DAY}/video/{filename}"
+    )
+    for invalid in ("http://videos.example.com", "https://localhost", "https://127.0.0.1"):
+        with pytest.raises(meta.ThreadsError):
+            meta.public_media_url(invalid, DAY, filename)
+
+
+def test_video_publish_records_receipt_and_does_not_publish_twice(isolated_runtime):
+    _, _ = isolated_runtime
+    media = isolated_runtime[0] / "videos" / DAY
+    media.mkdir(parents=True)
+    filename = f"techbro-{DAY}-120000-abcd1234.mp4"
+    video = media / filename
+    video.write_bytes(b"synthetic video bytes")
+    fake = FakeMeta()
+    client = fake.client()
+    url = f"https://videos.example.com/api/daily/{DAY}/video/{filename}"
+
+    first = meta.publish_video(DAY, filename, "Caption", video, url, client, USER_ID)
+    second = meta.publish_video(DAY, filename, "Caption", video, url, client, USER_ID)
+
+    assert first["state"] == second["state"] == "published"
+    assert first["postId"] == second["postId"] == "post-1"
+    assert len(fake.creates) == len(fake.publishes) == 1
+    assert fake.creates[0] == {
+        "media_type": ["VIDEO"],
+        "video_url": [url],
+        "text": ["Caption"],
+    }
+
+
 @pytest.mark.parametrize("day", ["../20310102", "20311301", "203112", "2031012"])
 def test_date_requires_exact_calendar_format(day):
     with pytest.raises(meta.ThreadsError, match="YYYYMMDD"):

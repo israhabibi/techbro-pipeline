@@ -89,7 +89,7 @@
 
   <section class="panel" id="video-studio">
     <div class="panel-head"><h2>Studio video harian</h2><span class="status">Naskah TTS + storyboard</span></div>
-    <p class="instructions">Naskah dan storyboard dibuat dari tiga topik teratas di draft. Salin naskah ke TTS di Gemini atau editor video, unduh audio-nya, lalu cari footage dan cek lisensinya. Setelah mengisi sumber aset dan mencentang verifikasi, unduh paket produksi. Untuk merender MP4, simpan klip sebagai <code>scene-01.mp4</code>, <code>scene-02.mp4</code>, dan seterusnya, lalu jalankan <code>python3 render_video.py --plan video-plan-TANGGAL.json --assets-dir FOLDER_KLIP --audio NARASI.mp3 --output HASIL.mp4</code>. Perubahan naskah dan catatan tersimpan di browser ini.</p>
+    <p class="instructions">Naskah dan storyboard dibuat dari tiga topik teratas di draft. Render MP4 dengan tombol di bawah; setelah file siap, kamu bisa menerbitkannya ke Threads. Publish video perlu token Threads dan URL publik HTTPS yang bisa diakses Meta (URL localhost tidak bisa dipakai).</p>
     <label for="voiceover-script" class="part-label">Naskah voice-over (bisa diedit)</label>
     <textarea id="voiceover-script" spellcheck="true" aria-label="Naskah TTS"></textarea>
     <div class="part-actions" style="margin:9px 0 16px">
@@ -107,7 +107,7 @@
   <section class="panel" id="tiktok-panel">
     <div class="panel-head"><h2>Caption TikTok</h2><span class="status">Siap disalin</span></div>
     <p class="instructions">Caption buat di-paste ke TikTok saat upload video hasil render di atas. File MP4 hasil render juga tersimpan di server di <code>/home/isra/techbro/videos</code>.</p>
-    <textarea id="tiktok-caption" aria-label="Caption TikTok" spellcheck="true" style="display:block;width:100%;min-height:170px;resize:vertical;border:1px solid var(--line);border-radius:9px;padding:13px;background:#fbfbf9;color:var(--ink);font:14px/1.6 system-ui,sans-serif"></textarea>
+    <textarea id="tiktok-caption" aria-label="Caption TikTok" maxlength="500" spellcheck="true" style="display:block;width:100%;min-height:170px;resize:vertical;border:1px solid var(--line);border-radius:9px;padding:13px;background:#fbfbf9;color:var(--ink);font:14px/1.6 system-ui,sans-serif"></textarea>
     <div class="part-actions" style="margin-top:9px">
       <button class="copy-all" id="copy-tiktok-caption" type="button">Salin caption</button>
       <span id="tiktok-copy-status" class="subtitle" aria-live="polite"></span>
@@ -131,6 +131,7 @@
 const selectedDay = {{ selected_day|tojson }};
 const dailyDraft = {{ (draft or {})|tojson }};
 const dailyTopics = {{ topics|tojson }};
+const canPublishThreadsVideo = {{ threads_video_publish_configured|tojson }};
 async function copyText(text) {
   try {
     if (navigator.clipboard && window.isSecureContext) return await navigator.clipboard.writeText(text);
@@ -191,9 +192,27 @@ if (voiceover && storyboard) {
     fetch(`/api/daily/${selectedDay}/videos`).then(r=>r.json()).then(d=>{
       const box=document.getElementById("rendered-videos");
       if(!d.videos||!d.videos.length){box.innerHTML='<p class="instructions">Belum ada video yang dirender untuk tanggal ini.</p>';return;}
-      box.innerHTML='<h3 style="margin-bottom:8px">Video hasil render</h3><div class="clip-grid">'+d.videos.map(v=>
-        `<div><video controls playsinline preload="metadata" src="${v.video_url}"></video><div class="clip-name"><a href="${v.video_url}" target="_blank">${v.filename}</a></div></div>`
-      ).join("")+'</div>';
+      box.replaceChildren();
+      const heading=document.createElement("h3");heading.textContent="Video hasil render";box.appendChild(heading);
+      const grid=document.createElement("div");grid.className="clip-grid";box.appendChild(grid);
+      d.videos.forEach(v=>{
+        const card=document.createElement("div"),player=document.createElement("video"),link=document.createElement("a");
+        player.controls=true;player.playsInline=true;player.preload="metadata";player.src=v.video_url;
+        link.href=v.video_url;link.target="_blank";link.rel="noopener";link.textContent=v.filename;
+        const name=document.createElement("div");name.className="clip-name";name.appendChild(link);
+        const publish=document.createElement("button");publish.className="copy-all";publish.type="button";publish.textContent="Terbitkan ke Threads";publish.disabled=!canPublishThreadsVideo;
+        const publishStatus=document.createElement("p");publishStatus.className="instructions";publishStatus.setAttribute("aria-live","polite");
+        if(!canPublishThreadsVideo)publishStatus.textContent="Perlu konfigurasi token Threads dan URL publik HTTPS untuk file video.";
+        publish.addEventListener("click",async()=>{
+          publish.disabled=true;publish.textContent="Sedang mengunggah ke Threads…";publishStatus.textContent="Meta sedang mengambil dan memproses video.";
+          try{
+            const response=await fetch(`/api/daily/${selectedDay}/video/${encodeURIComponent(v.filename)}/publish`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({caption:document.getElementById("tiktok-caption").value})});
+            const result=await response.json();if(!response.ok)throw new Error(result.detail||"Gagal menerbitkan video.");
+            publishStatus.textContent=`Video sudah terbit di Threads · ID ${result.post_id}`;publish.textContent="Sudah terbit";
+          }catch(error){publishStatus.textContent=error.message;publish.disabled=false;publish.textContent="Terbitkan ke Threads";}
+        });
+        card.append(player,name,publish,publishStatus);grid.appendChild(card);
+      });
     }).catch(()=>{});
   }
   loadRendered();

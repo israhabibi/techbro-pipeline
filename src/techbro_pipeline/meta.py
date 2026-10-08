@@ -3,6 +3,7 @@
 import argparse
 import fcntl
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -10,6 +11,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 from dotenv import dotenv_values, set_key
@@ -127,7 +129,16 @@ class ThreadsClient:
         # Keep creation separate from publishing; never set auto_publish_text.
         return response_id(self.request("POST", "me/threads", data=data))
 
-    def wait_until_ready(self, container_id, attempts=10):
+    def create_video_container(self, text, video_url):
+        return response_id(
+            self.request(
+                "POST",
+                "me/threads",
+                data={"media_type": "VIDEO", "video_url": video_url, "text": text},
+            )
+        )
+
+    def wait_until_ready(self, container_id, attempts=10, interval=2):
         for attempt in range(attempts):
             result = self.request("GET", container_id, params={"fields": "status"})
             status = result.get("status")
@@ -138,7 +149,7 @@ class ThreadsClient:
                     "container is not publishable; inspect its receipt and Threads account"
                 )
             if attempt < attempts - 1:
-                self.sleep(2)
+                self.sleep(interval)
         raise ThreadsError("container is still processing; rerun to check the same container")
 
     def publish_container(self, container_id):
@@ -290,6 +301,111 @@ def publish(day, texts, client, expected_user_id):
             part["state"] = "published"
             write_json(path, receipt)
             reply_to_id = part["postId"]
+        receipt["state"] = "published"
+        write_json(path, receipt)
+        return receipt
+
+
+def public_media_url(base_url, day, filename):
+    """Build a public video URL from the configured public app origin."""
+    parsed = urlparse(base_url or "")
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ThreadsError("set THREADS_MEDIA_PUBLIC_BASE_URL to a public HTTPS app origin")
+    try:
+        address = ipaddress.ip_address(parsed.hostname)
+    except ValueError:
+        if parsed.hostname.lower() == "localhost" or "." not in parsed.hostname:
+            raise ThreadsError("THREADS_MEDIA_PUBLIC_BASE_URL must use a public hostname") from None
+    else:
+        if not address.is_global:
+            raise ThreadsError("THREADS_MEDIA_PUBLIC_BASE_URL must use a public hostname")
+    validate_day(day)
+    if not re.fullmatch(rf"techbro-{day}-\d{{6}}-[0-9a-f]{{8}}\.mp4", filename or ""):
+        raise ThreadsError("video filename is invalid")
+    return f"{parsed.scheme}://{parsed.netloc}{parsed.path.rstrip('/')}/api/daily/{day}/video/{filename}"
+
+
+def video_receipt_path(day, user_id, fingerprint):
+    validate_day(day)
+    account_hash = hashlib.sha256(user_id.encode("utf-8")).hexdigest()
+    return Settings.from_env().data_dir / "meta" / f"video_{day}_{account_hash}_{fingerprint}.json"
+
+
+def publish_video(day, filename, caption, video_path, video_url, client, expected_user_id):
+    """Publish one video with a durable receipt to prevent duplicate retries."""
+    validate_day(day)
+    if not isinstance(caption, str) or not caption.strip() or len(caption) > 500:
+        raise ThreadsError("caption must contain 1–500 characters")
+    video_path = Path(video_path)
+    if not video_path.is_file() or video_path.suffix.lower() != ".mp4":
+        raise ThreadsError("rendered MP4 is missing or invalid")
+    video_hash = hashlib.sha256()
+    with video_path.open("rb") as video_file:
+        for chunk in iter(lambda: video_file.read(1024 * 1024), b""):
+            video_hash.update(chunk)
+    fingerprint = hashlib.sha256(f"{video_hash.hexdigest()}\0{caption}".encode()).hexdigest()
+    profile = client.profile()
+    if not expected_user_id or not ID_RE.fullmatch(expected_user_id):
+        raise ThreadsError("set THREADS_USER_ID from the meta profile command before publishing")
+    if profile["id"] != expected_user_id:
+        raise ThreadsError("token belongs to a different account than THREADS_USER_ID")
+    path = video_receipt_path(day, profile["id"], fingerprint)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.with_suffix(".lock").open("a", encoding="utf-8") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise ThreadsError("another publisher for this video is active") from None
+        if path.exists():
+            receipt = json.loads(path.read_text(encoding="utf-8"))
+            if (
+                not isinstance(receipt, dict)
+                or receipt.get("requestHash") != fingerprint
+                or receipt.get("userId") != profile["id"]
+                or receipt.get("date") != day
+                or receipt.get("filename") != filename
+            ):
+                raise ThreadsError("video receipt is invalid; inspect it before retrying")
+            if receipt.get("state") == "published":
+                return receipt
+            if receipt.get("state") == "unknown":
+                raise ThreadsError("publish outcome is unknown; inspect Threads before retrying")
+        else:
+            receipt = {
+                "date": day,
+                "userId": profile["id"],
+                "filename": filename,
+                "requestHash": fingerprint,
+                "state": "draft",
+                "containerId": None,
+                "postId": None,
+            }
+            write_json(path, receipt)
+        if not receipt.get("containerId"):
+            receipt["state"] = "creating"
+            write_json(path, receipt)
+            receipt["containerId"] = client.create_video_container(caption, video_url)
+            receipt["state"] = "created"
+            write_json(path, receipt)
+        container_id = response_id({"id": receipt["containerId"]})
+        client.wait_until_ready(container_id, attempts=90, interval=5)
+        receipt["state"] = "publishing"
+        write_json(path, receipt)
+        try:
+            receipt["postId"] = client.publish_container(container_id)
+        except ThreadsError:
+            receipt["state"] = "unknown"
+            write_json(path, receipt)
+            raise ThreadsError(
+                "video publish outcome is unknown; inspect Threads before retrying"
+            ) from None
         receipt["state"] = "published"
         write_json(path, receipt)
         return receipt

@@ -12,6 +12,9 @@ services:
       ENABLE_VIDEO_RENDER: ${ENABLE_VIDEO_RENDER:-false}
       TTS_BACKEND: local
       PEXELS_API_KEY: ${PEXELS_API_KEY:-}
+      THREADS_ACCESS_TOKEN: ${THREADS_ACCESS_TOKEN:-}
+      THREADS_USER_ID: ${THREADS_USER_ID:-}
+      THREADS_MEDIA_PUBLIC_BASE_URL: ${THREADS_MEDIA_PUBLIC_BASE_URL:-}
     volumes:
       - ./data:/data
       - ./dataset:/dataset:ro

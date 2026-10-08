@@ -119,6 +119,27 @@ def test_video_requires_enabled_feature_and_rejects_client_filesystem_path(clien
     assert client.post(f"/api/daily/{day}/video", content="bad-json").status_code == 400
 
 
+def test_video_publish_requires_threads_and_public_media_configuration(
+    client, isolated_runtime, monkeypatch
+):
+    data, _ = isolated_runtime
+    demo.main()
+    day = day_stamp()
+    folder = data / "videos" / day
+    folder.mkdir(parents=True)
+    filename = f"techbro-{day}-120000-abcd1234.mp4"
+    (folder / filename).write_bytes(b"synthetic MP4")
+    monkeypatch.setattr(main, "THREADS_ACCESS_TOKEN", "")
+    monkeypatch.setattr(main, "THREADS_USER_ID", "")
+    monkeypatch.setattr(main, "THREADS_MEDIA_PUBLIC_BASE_URL", "")
+    monkeypatch.setattr(main, "THREADS_VIDEO_PUBLISH_CONFIGURED", False)
+    response = client.post(
+        f"/api/daily/{day}/video/{filename}/publish", json={"caption": "Caption"}
+    )
+    assert response.status_code == 503
+    assert "THREADS_MEDIA_PUBLIC_BASE_URL" in response.json()["detail"]
+
+
 def test_failed_video_releases_render_lock(client, monkeypatch):
     demo.main()
     monkeypatch.setattr(main, "VIDEO_RENDER_ENABLED", True)

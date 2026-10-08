@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from starlette.concurrency import run_in_threadpool
 
 from techbro_pipeline.config import Settings, day_stamp
+from techbro_pipeline.meta import ThreadsClient, ThreadsError, public_media_url, publish_video
 from techbro_pipeline.web.pipeline_status import build_status
 from techbro_pipeline.web.video_generation import VideoGenerationError, render_daily_video
 
@@ -38,6 +39,12 @@ VIDEO_RENDER_ENABLED = os.environ.get("ENABLE_VIDEO_RENDER", "false").lower() in
     "yes",
 }
 PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY", "")
+THREADS_ACCESS_TOKEN = os.environ.get("THREADS_ACCESS_TOKEN", "")
+THREADS_USER_ID = os.environ.get("THREADS_USER_ID", "")
+THREADS_MEDIA_PUBLIC_BASE_URL = os.environ.get("THREADS_MEDIA_PUBLIC_BASE_URL", "")
+THREADS_VIDEO_PUBLISH_CONFIGURED = bool(
+    THREADS_ACCESS_TOKEN and THREADS_USER_ID and THREADS_MEDIA_PUBLIC_BASE_URL
+)
 VIDEO_RENDER_LOCK = threading.Lock()
 
 
@@ -176,6 +183,7 @@ def daily_page(request: Request, day: str = None):
             "feed": feed or {},
             "topics": (topics or {}).get("topics", []),
             "draft": draft,
+            "threads_video_publish_configured": THREADS_VIDEO_PUBLISH_CONFIGURED,
         },
     )
 
@@ -243,6 +251,42 @@ async def generate_daily_video(day: str, request: Request):
         "subtitle_url": f"/api/daily/{day}/video/{result['srt']}",
         "credits_url": f"/api/daily/{day}/video/{result['credits']}",
     }
+
+
+class VideoPublishRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    caption: str = Field(min_length=1, max_length=500)
+
+
+@app.post("/api/daily/{day}/video/{filename}/publish")
+async def publish_daily_video(day: str, filename: str, body: VideoPublishRequest):
+    if day not in _daily_dates():
+        raise HTTPException(status_code=404, detail="Tanggal tidak ditemukan")
+    path = os.path.join(DATA_DIR, "videos", day, filename)
+    try:
+        video_url = public_media_url(THREADS_MEDIA_PUBLIC_BASE_URL, day, filename)
+    except ThreadsError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if not THREADS_VIDEO_PUBLISH_CONFIGURED:
+        raise HTTPException(
+            status_code=503,
+            detail="Atur THREADS_ACCESS_TOKEN, THREADS_USER_ID, dan THREADS_MEDIA_PUBLIC_BASE_URL",
+        )
+    try:
+        with ThreadsClient(THREADS_ACCESS_TOKEN) as client:
+            receipt = await run_in_threadpool(
+                publish_video,
+                day,
+                filename,
+                body.caption,
+                path,
+                video_url,
+                client,
+                THREADS_USER_ID,
+            )
+    except ThreadsError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "state": receipt["state"], "post_id": receipt["postId"]}
 
 
 @app.get("/api/daily/{day}/video/{filename}")

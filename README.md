@@ -96,6 +96,7 @@ Configuration:
 | `THREADS_APP_ID` | Unset; Threads app identity for Meta setup; posting uses the user token |
 | `THREADS_ACCESS_TOKEN` | Unset; Threads user access token with publishing permission |
 | `THREADS_USER_ID` | Unset; explicit target from `techbro meta profile`, distinct from app ID |
+| `THREADS_MEDIA_PUBLIC_BASE_URL` | Unset; public HTTPS origin Meta uses to fetch rendered video files |
 | `THREADS_AUTO_PUBLISH` | `false`; opt into immediate Meta publishing after a successful pipeline |
 | `REPLIZ_ACCESS_KEY` / `REPLIZ_SECRET_KEY` | Unset; server-side Repliz API credentials |
 | `REPLIZ_ACCOUNT_ID` | Unset; connected Threads account ID |
@@ -126,6 +127,13 @@ non-root user, and mounts `data/` and `dataset/`. A new checkout starts with an
 empty dashboard until a demo or live pipeline has run. Enable video generation
 explicitly; the image includes FFmpeg, eSpeak NG, and DejaVu fonts. Existing data
 must be writable by container UID 1000 for generated videos.
+
+The video studio can publish a rendered MP4 to Threads after an explicit button
+click. Configure the Threads token and user ID plus
+`THREADS_MEDIA_PUBLIC_BASE_URL`; Meta must be able to fetch the video from that
+HTTPS origin. The default local-only deployment cannot publish video until it
+is reachable through a public HTTPS host. Text-only publishing does not need
+this media URL.
 
 Keep any existing reverse proxy separate. Optional ingress configuration is in
 `deploy/ingress/`; authenticate the dashboard before exposing a personal timeline.
